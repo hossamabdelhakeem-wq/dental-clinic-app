@@ -1,0 +1,17 @@
+/* print.css — تنسيق صفحات الطباعة (فواتير، روشتات، ملخصات) */
+* { box-sizing: border-box; }
+body {
+  direction: rtl; text-align: right; font-family: "Segoe UI", Tahoma, Arial, sans-serif;
+  color: #111; margin: 24px; font-size: 13px;
+}
+.print-header { text-align: center; margin-bottom: 18px; border-bottom: 2px solid #0f2647; padding-bottom: 10px; }
+.print-logo { height: 70px; width: auto; display: block; margin: 0 auto 8px; }
+.print-header h1 { margin: 0 0 4px; font-size: 19px; color: #0f2647; }
+.print-table { width: 100%; border-collapse: collapse; margin-bottom: 16px; }
+.print-table th, .print-table td { border: 1px solid #ccc; padding: 8px 10px; text-align: right; }
+.print-table th { background: #f4f6fb; }
+.print-footer { margin-top: 30px; text-align: center; color: #777; font-size: 11px; border-top: 1px solid #ccc; padding-top: 10px; }
+h3, h4 { color: #0f2647; }
+@media print {
+  body { margin: 10mm; }
+}

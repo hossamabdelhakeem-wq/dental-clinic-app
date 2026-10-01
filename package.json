@@ -1,0 +1,16 @@
+{
+  "name": "dental-clinic-app",
+  "version": "1.0.0",
+  "description": "نظام إدارة عيادة أسنان د/ حسام عبدالحكيم عوض الشاهين - تطبيق سطح مكتب يعمل بدون إنترنت",
+  "main": "main.js",
+  "author": "Dr. Hossam Abdelhakim Awad Elshahin Dental Clinic",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dist:win": "electron-packager . \"عيادة-اسنان-د-حسام\" --platform=win32 --arch=x64 --out=dist --overwrite --asar --icon=app-icon.ico"
+  },
+  "devDependencies": {
+    "electron": "^31.7.7",
+    "electron-packager": "^17.1.2"
+  }
+}
