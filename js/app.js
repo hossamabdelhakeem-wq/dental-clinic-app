@@ -29,6 +29,23 @@ async function boot() {
   setupQuickAdd();
   setupSyncIndicator();
   initSyncEngine();
+  setupSidebarToggle();
+}
+
+function setupSidebarToggle() {
+  const toggleBtn = document.getElementById('sidebar-toggle-btn');
+  const sidebar = document.getElementById('sidebar');
+  const overlay = document.getElementById('sidebar-overlay');
+  if (!toggleBtn || !sidebar || !overlay) return;
+  const closeSidebar = () => { sidebar.classList.remove('open'); overlay.classList.remove('open'); };
+  const openSidebar = () => { sidebar.classList.add('open'); overlay.classList.add('open'); };
+  toggleBtn.addEventListener('click', () => {
+    sidebar.classList.contains('open') ? closeSidebar() : openSidebar();
+  });
+  overlay.addEventListener('click', closeSidebar);
+  sidebar.addEventListener('click', (e) => {
+    if (e.target.closest('.nav-item') || e.target.closest('#sidebar-quick button')) closeSidebar();
+  });
 }
 
 function renderSidebar() {
