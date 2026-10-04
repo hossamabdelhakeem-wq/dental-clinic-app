@@ -50,13 +50,14 @@ function stripInternal(obj) {
 async function pushChanges() {
   if (!supaClient) return { pushed: 0 };
   let pushed = 0;
+  const errors = [];
   for (const store of SYNCED_STORES) {
     const all = await DB.all(store);
     const dirty = all.filter(r => r._dirty);
     if (!dirty.length) continue;
     const rows = dirty.map(r => ({ sync_id: r.syncId, data: stripInternal(r), updated_at: r.updatedAt, deleted: false }));
     const { error } = await supaClient.from(store).upsert(rows, { onConflict: 'sync_id' });
-    if (error) { console.error('push error', store, error.message); continue; }
+    if (error) { console.error('push error', store, error.message); errors.push(`${store}: ${error.message}`); continue; }
     for (const r of dirty) {
       const fresh = await DB.get(store, r.id);
       if (fresh) await DB.put(store, { ...fresh, _dirty: false }, { skipMeta: true, skipNotify: true });
@@ -68,7 +69,9 @@ async function pushChanges() {
   for (const t of tombstones) {
     const { error } = await supaClient.from(t.store).update({ deleted: true, updated_at: new Date().toISOString() }).eq('sync_id', t.syncId);
     if (!error) await DB.delete('tombstones', t.id);
+    else errors.push(`${t.store} (حذف): ${error.message}`);
   }
+  if (errors.length) throw new Error('فشل الدفع: ' + errors[0] + (errors.length > 1 ? ` (و${errors.length - 1} خطأ تاني)` : ''));
   return { pushed };
 }
 
@@ -79,10 +82,11 @@ async function pullChanges() {
   const since = cfg.lastPullAt || '1970-01-01T00:00:00.000Z';
   let pulled = 0;
   let maxUpdatedAt = since;
+  const errors = [];
 
   for (const store of SYNCED_STORES) {
     const { data: rows, error } = await supaClient.from(store).select('*').gt('updated_at', since);
-    if (error) { console.error('pull error', store, error.message); continue; }
+    if (error) { console.error('pull error', store, error.message); errors.push(`${store}: ${error.message}`); continue; }
     for (const row of rows) {
       if (row.updated_at > maxUpdatedAt) maxUpdatedAt = row.updated_at;
       const localMatches = await DB.byIndex(store, 'syncId', row.sync_id);
@@ -115,6 +119,7 @@ async function pullChanges() {
     }
   }
   await saveSyncConfig({ lastPullAt: maxUpdatedAt });
+  if (errors.length) throw new Error('فشل الجذب: ' + errors[0] + (errors.length > 1 ? ` (و${errors.length - 1} خطأ تاني)` : ''));
   return { pulled };
 }
 
@@ -126,27 +131,32 @@ async function bumpPatientCounter(fileNumber) {
 }
 
 async function runSyncPass(mode = 'both') {
-  if (syncRunning) { syncPending = 'both'; return; }
-  if (!navigator.onLine) return;
+  if (syncRunning) { syncPending = 'both'; return { ok: false, error: 'جاري تنفيذ مزامنة تانية بالفعل' }; }
+  if (!navigator.onLine) return { ok: false, error: 'لا يوجد اتصال بالإنترنت حاليًا' };
   const cfg = await getSyncConfig();
-  if (!cfg.enabled || !cfg.url || !cfg.anonKey) return;
+  if (!cfg.enabled || !cfg.url || !cfg.anonKey) return { ok: false, error: 'المزامنة غير مفعّلة' };
   if (!supaClient) initSupabaseClient(cfg.url, cfg.anonKey);
-  if (!supaClient) return;
+  if (!supaClient) return { ok: false, error: 'تعذّر إنشاء الاتصال — راجع الرابط والمفتاح' };
   syncRunning = true;
   notifySyncStatus('syncing');
+  let result = { ok: true };
   try {
     if (mode === 'push' || mode === 'both') await pushChanges();
     if (mode === 'pull' || mode === 'both') await pullChanges();
-    await saveSyncConfig({ lastSyncAt: new Date().toISOString() });
+    await saveSyncConfig({ lastSyncAt: new Date().toISOString(), lastError: null });
     notifySyncStatus('idle');
     if (typeof route === 'function') route(); // حدّث الشاشة الحالية عشان تعرض أي بيانات جديدة فورًا
   } catch (e) {
     console.error('sync error', e);
+    const msg = (e && e.message) ? e.message : String(e);
+    await saveSyncConfig({ lastError: msg });
     notifySyncStatus('error');
+    result = { ok: false, error: msg };
   } finally {
     syncRunning = false;
     if (syncPending) { const m = syncPending; syncPending = null; runSyncPass(m); }
   }
+  return result;
 }
 
 function startRealtime() {

@@ -80,8 +80,9 @@ async function renderSyncCard(container) {
     ${cfg.enabled ? `
       <div class="summary-cards">
         <div class="stat-card"><div class="stat-label">حالة الاتصال</div><div class="stat-value" id="sync-card-status">جاري الفحص...</div></div>
-        <div class="stat-card"><div class="stat-label">آخر مزامنة</div><div class="stat-value" style="font-size:14px">${cfg.lastSyncAt ? U.fmtDateTime(cfg.lastSyncAt) : 'لسه ماحصلتش'}</div></div>
+        <div class="stat-card"><div class="stat-label">آخر مزامنة ناجحة</div><div class="stat-value" style="font-size:14px">${cfg.lastSyncAt ? U.fmtDateTime(cfg.lastSyncAt) : 'لسه ماحصلتش'}</div></div>
       </div>
+      ${cfg.lastError ? `<div class="error-box" style="margin-bottom:12px">آخر خطأ في المزامنة: ${U.esc(cfg.lastError)}</div>` : ''}
       <div class="stack-btns" style="flex-direction:row">
         <button class="btn btn-primary" id="sync-now-btn">مزامنة الآن</button>
         <button class="btn btn-danger" id="sync-disconnect-btn">فصل المزامنة</button>
@@ -116,8 +117,14 @@ async function renderSyncCard(container) {
       const data = Object.fromEntries(new FormData(container.querySelector('#sync-connect-form')).entries());
       if (!data.url || !data.anonKey) { U.toast('أدخل الرابط والمفتاح أولًا', 'error'); return; }
       U.toast('جاري الاتصال والمزامنة الأولى...');
-      await connectSyncNow(data.url.trim(), data.anonKey.trim());
-      U.toast('تم تفعيل المزامنة بنجاح');
+      await saveSyncConfig({ url: data.url.trim(), anonKey: data.anonKey.trim(), enabled: true });
+      await initSyncEngine();
+      const result = await runSyncPass('both');
+      if (result.ok) {
+        U.toast('تم تفعيل المزامنة ونجحت أول مزامنة بنجاح ✅');
+      } else {
+        U.toast('اتصل لكن فشلت المزامنة: ' + result.error, 'error');
+      }
       renderSyncCard(container);
     });
   }
