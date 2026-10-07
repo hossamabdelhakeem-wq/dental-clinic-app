@@ -10,6 +10,8 @@ let syncRunning = false;
 let syncPending = null;
 let syncTimer = null;
 let realtimeChannels = [];
+let lastAutoSyncAt = 0;
+const MIN_AUTO_SYNC_GAP_MS = 4000; // حد أدنى بين كل محاولة مزامنة تلقائية والتانية، يمنع أي تكرار سريع غير متوقع
 const SYNC_LISTENERS = [];
 
 function onSyncStatusChange(fn) { SYNC_LISTENERS.push(fn); }
@@ -19,7 +21,12 @@ function notifySyncStatus(status) { SYNC_LISTENERS.forEach(fn => { try { fn(stat
 let localChangeDebounce = null;
 function onLocalChange() {
   if (localChangeDebounce) clearTimeout(localChangeDebounce);
-  localChangeDebounce = setTimeout(() => { runSyncPass('push'); }, 1500);
+  localChangeDebounce = setTimeout(() => {
+    const now = Date.now();
+    if (now - lastAutoSyncAt < MIN_AUTO_SYNC_GAP_MS) return; // حماية إضافية من أي تكرار سريع غير متوقع
+    lastAutoSyncAt = now;
+    runSyncPass('push');
+  }, 1500);
 }
 
 async function getSyncConfig() {

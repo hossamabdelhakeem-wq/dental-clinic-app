@@ -83,7 +83,7 @@ const DB = {
       }
       const t = tx(store, 'readwrite').objectStore(store);
       const r = t.add(obj);
-      r.onsuccess = () => { if (!opts.skipNotify && typeof onLocalChange === 'function') onLocalChange(); resolve(r.result); };
+      r.onsuccess = () => { if (!opts.skipNotify && SYNCED_STORES.includes(store) && typeof onLocalChange === 'function') onLocalChange(); resolve(r.result); };
       r.onerror = () => reject(r.error);
     });
   },
@@ -94,7 +94,7 @@ const DB = {
       }
       const t = tx(store, 'readwrite').objectStore(store);
       const r = t.put(obj);
-      r.onsuccess = () => { if (!opts.skipNotify && typeof onLocalChange === 'function') onLocalChange(); resolve(r.result); };
+      r.onsuccess = () => { if (!opts.skipNotify && SYNCED_STORES.includes(store) && typeof onLocalChange === 'function') onLocalChange(); resolve(r.result); };
       r.onerror = () => reject(r.error);
     });
   },
@@ -114,7 +114,7 @@ const DB = {
     }
     return new Promise((resolve, reject) => {
       const r = tx(store, 'readwrite').objectStore(store).delete(key);
-      r.onsuccess = () => { if (typeof onLocalChange === 'function') onLocalChange(); resolve(); };
+      r.onsuccess = () => { if (SYNCED_STORES.includes(store) && typeof onLocalChange === 'function') onLocalChange(); resolve(); };
       r.onerror = () => reject(r.error);
     });
   },
