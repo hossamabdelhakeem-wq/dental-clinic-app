@@ -75,57 +75,84 @@ Views.settings = async function(main, param) {
 async function renderSyncCard(container) {
   const cfg = await getSyncConfig();
   container.innerHTML = `
-    <h3>المزامنة السحابية بين جهازين</h3>
-    <p class="muted">البرنامج يفضل شغال بالكامل من غير إنترنت. لو وصّلت الحساب السحابي تحت، أي بيانات تدخلها هتتزامن تلقائيًا مع الجهاز التاني لما يبقى في نت — من غير ما تعمل حاجة يدويًا.</p>
+    <h3>المزامنة السحابية بين الأجهزة</h3>
+    <p class="muted">البرنامج يفضل شغال من غير إنترنت. لو فعّلت المزامنة، أي بيانات بتدخلها بتتنقل للأجهزة التانية لما يبقى في نت.</p>
     ${cfg.enabled ? `
       <div class="summary-cards">
-        <div class="stat-card"><div class="stat-label">حالة الاتصال</div><div class="stat-value" id="sync-card-status">جاري الفحص...</div></div>
+        <div class="stat-card"><div class="stat-label">حالة الاتصال</div><div class="stat-value" id="sync-card-status">...</div></div>
         <div class="stat-card"><div class="stat-label">آخر مزامنة ناجحة</div><div class="stat-value" style="font-size:14px">${cfg.lastSyncAt ? U.fmtDateTime(cfg.lastSyncAt) : 'لسه ماحصلتش'}</div></div>
       </div>
       ${cfg.lastError ? `<div class="error-box" style="margin-bottom:12px">آخر خطأ في المزامنة: ${U.esc(cfg.lastError)}</div>` : ''}
-      <div class="stack-btns" style="flex-direction:row">
+      <div class="stack-btns" style="flex-direction:row;flex-wrap:wrap">
         <button class="btn btn-primary" id="sync-now-btn">مزامنة الآن</button>
+        <button class="btn" id="sync-diag-btn">فحص الاتصال</button>
+        <button class="btn" id="sync-full-btn">إعادة مزامنة كاملة</button>
         <button class="btn btn-danger" id="sync-disconnect-btn">فصل المزامنة</button>
       </div>
     ` : `
       <form id="sync-connect-form" class="form-grid">
         <label class="span-2">رابط المشروع (Project URL)<input name="url" class="input" placeholder="https://xxxxxxxx.supabase.co" value="${U.esc(cfg.url||'')}"></label>
-        <label class="span-2">المفتاح العام (anon public key)<input name="anonKey" class="input" placeholder="eyJhbGciOi..." value="${U.esc(cfg.anonKey||'')}"></label>
+        <label class="span-2">المفتاح العام (anon / publishable key)<input name="anonKey" class="input" placeholder="eyJhbGci... أو sb_publishable_..." value="${U.esc(cfg.anonKey||'')}"></label>
       </form>
-      <button class="btn btn-primary" id="sync-connect-btn">تفعيل المزامنة</button>
+      <div class="stack-btns" style="flex-direction:row;flex-wrap:wrap">
+        <button class="btn btn-primary" id="sync-connect-btn">فحص وتفعيل المزامنة</button>
+      </div>
     `}
+    <div id="sync-diag-result" style="margin-top:12px"></div>
+    <details style="margin-top:14px">
+      <summary style="cursor:pointer">كود إعداد قاعدة البيانات (SQL) — بيتشغّل مرة واحدة بس في Supabase</summary>
+      <p class="muted-sm">انسخ الكود ← Supabase ← SQL Editor ← New query ← الصق ← Run.</p>
+      <textarea id="sync-sql-box" class="input" rows="8" readonly style="direction:ltr;font-family:monospace;font-size:12px"></textarea>
+      <button class="btn btn-sm" id="sync-sql-copy" style="margin-top:6px">نسخ الكود</button>
+    </details>
   `;
+  container.querySelector('#sync-sql-box').value = SYNC_SETUP_SQL;
+  container.querySelector('#sync-sql-copy').addEventListener('click', async () => {
+    const box = container.querySelector('#sync-sql-box');
+    try { await navigator.clipboard.writeText(SYNC_SETUP_SQL); } catch (e) { box.select(); document.execCommand('copy'); }
+    U.toast('تم نسخ الكود');
+  });
+  const showDiag = (res) => {
+    container.querySelector('#sync-diag-result').innerHTML = `<div class="${res.ok ? 'card' : 'error-box'}" style="white-space:pre-line">${U.esc(res.message)}</div>`;
+  };
   if (cfg.enabled) {
     const statusEl = container.querySelector('#sync-card-status');
-    const updateStatus = () => { statusEl.textContent = navigator.onLine ? 'متصل ✅' : 'غير متصل بالإنترنت ⚪'; };
-    updateStatus();
-    window.addEventListener('online', updateStatus);
+    statusEl.textContent = navigator.onLine ? 'متصل ✅' : 'غير متصل بالإنترنت ⚪';
     container.querySelector('#sync-now-btn').addEventListener('click', async () => {
       U.toast('جاري المزامنة...');
-      await runSyncPass('both');
-      U.toast('تمت المزامنة');
+      const r = await runSyncPass('both');
+      U.toast(r.ok ? 'تمت المزامنة' : ('فشلت المزامنة: ' + r.error), r.ok ? 'success' : 'error');
+      renderSyncCard(container);
+    });
+    container.querySelector('#sync-diag-btn').addEventListener('click', async () => {
+      showDiag({ ok: true, message: 'جاري الفحص...' });
+      showDiag(await diagnoseSync(cfg.url, cfg.anonKey));
+    });
+    container.querySelector('#sync-full-btn').addEventListener('click', async () => {
+      if (!(await U.confirm('هيبعت كل بيانات الجهاز ده للسحابة ويسحب كل اللي عليها من الأول. متابعة؟'))) return;
+      U.toast('جاري إعادة المزامنة الكاملة...');
+      const r = await fullResync();
+      U.toast(r.ok ? 'تمت المزامنة الكاملة' : ('فشلت: ' + r.error), r.ok ? 'success' : 'error');
       renderSyncCard(container);
     });
     container.querySelector('#sync-disconnect-btn').addEventListener('click', async () => {
-      if (await U.confirm('هل تريد فصل المزامنة السحابية؟ بياناتك المحلية هتفضل موجودة عندك زي ما هي.')) {
-        await disconnectSync();
-        renderSyncCard(container);
-      }
+      if (await U.confirm('هل تريد فصل المزامنة؟ بياناتك المحلية هتفضل موجودة زي ما هي.')) { await disconnectSync(); renderSyncCard(container); }
     });
   } else {
     container.querySelector('#sync-connect-btn').addEventListener('click', async () => {
-      const data = Object.fromEntries(new FormData(container.querySelector('#sync-connect-form')).entries());
-      if (!data.url || !data.anonKey) { U.toast('أدخل الرابط والمفتاح أولًا', 'error'); return; }
-      U.toast('جاري الاتصال والمزامنة الأولى...');
-      await saveSyncConfig({ url: data.url.trim(), anonKey: data.anonKey.trim(), enabled: true });
+      const form = container.querySelector('#sync-connect-form');
+      const data = Object.fromEntries(new FormData(form).entries());
+      const url = normalizeSupabaseUrl(data.url);
+      const key = String(data.anonKey || '').trim();
+      form.querySelector('[name="url"]').value = url;
+      showDiag({ ok: true, message: 'جاري فحص الاتصال...' });
+      const res = await diagnoseSync(url, key);
+      showDiag(res);
+      if (!res.ok) { U.toast('الاتصال مش سليم — اقرأ الرسالة تحت', 'error'); return; }
+      await saveSyncConfig({ url, anonKey: key, enabled: true, lastPullAt: null, lastError: null });
       await initSyncEngine();
-      const result = await runSyncPass('both');
-      if (result.ok) {
-        U.toast('تم تفعيل المزامنة ونجحت أول مزامنة بنجاح ✅');
-      } else {
-        U.toast('اتصل لكن فشلت المزامنة: ' + result.error, 'error');
-      }
-      renderSyncCard(container);
+      U.toast('تم تفعيل المزامنة، جاري أول مزامنة...');
+      setTimeout(() => renderSyncCard(container), 2500);
     });
   }
 }

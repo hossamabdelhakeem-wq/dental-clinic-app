@@ -105,8 +105,8 @@ const DB = {
       r.onerror = () => reject(r.error);
     });
   },
-  async delete(store, key) {
-    if (SYNCED_STORES.includes(store)) {
+  async delete(store, key, opts = {}) {
+    if (SYNCED_STORES.includes(store) && !opts.skipTombstone) {
       const existing = await DB.get(store, key);
       if (existing && existing.syncId) {
         await DB.add('tombstones', { store, syncId: existing.syncId, deletedAt: new Date().toISOString() });
@@ -114,7 +114,7 @@ const DB = {
     }
     return new Promise((resolve, reject) => {
       const r = tx(store, 'readwrite').objectStore(store).delete(key);
-      r.onsuccess = () => { if (SYNCED_STORES.includes(store) && typeof onLocalChange === 'function') onLocalChange(); resolve(); };
+      r.onsuccess = () => { if (!opts.skipNotify && SYNCED_STORES.includes(store) && typeof onLocalChange === 'function') onLocalChange(); resolve(); };
       r.onerror = () => reject(r.error);
     });
   },
