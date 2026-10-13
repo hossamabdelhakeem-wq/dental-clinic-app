@@ -86,6 +86,7 @@ const U = {
   },
 
   exportToExcel(sheets, filename) {
+    if (typeof canDo === 'function' && !canDo('export')) { U.toast('ليس لديك صلاحية تصدير Excel', 'error'); return; }
     // sheets: [{name, rows: [ {colAr: val, ...}, ... ]}]
     const wb = XLSX.utils.book_new();
     sheets.forEach(sheet => {

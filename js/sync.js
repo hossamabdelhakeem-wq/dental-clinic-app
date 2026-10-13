@@ -19,6 +19,7 @@ const MIN_AUTO_SYNC_GAP_MS = 4000;
 const SYNC_LISTENERS = [];
 
 const SYNC_ORDER = [
+  'users',
   'serviceCategories','services','expenseCategories','visitTypes','paymentMethods',
   'appointmentStatuses','patientSources','drugs','prescriptionTemplates','doctors',
   'patients','appointments','visits','visitServices','payments','expenses',
@@ -45,7 +46,7 @@ declare
     'patients','appointments','visits','visitServices','services','serviceCategories',
     'payments','expenses','expenseCategories','visitTypes','paymentMethods',
     'appointmentStatuses','patientSources','drugs','prescriptions','prescriptionItems',
-    'prescriptionTemplates','treatmentPlans','doctors'
+    'prescriptionTemplates','treatmentPlans','doctors','users'
   ];
 begin
   foreach t in array tables loop
@@ -65,6 +66,8 @@ begin
     end;
   end loop;
 end $$;`;
+
+const isMissingTable = (m) => /does not exist|could not find the table|schema cache/i.test(m || '');
 
 function onSyncStatusChange(fn) { SYNC_LISTENERS.push(fn); }
 function notifySyncStatus(status) { SYNC_LISTENERS.forEach(fn => { try { fn(status); } catch (e) {} }); }
@@ -171,7 +174,7 @@ async function pushChanges() {
       const rows = [];
       for (const r of chunk) rows.push({ sync_id: r.syncId, data: await toRemote(store, r), updated_at: r.updatedAt, deleted: false });
       const { error } = await supaClient.from(store).upsert(rows, { onConflict: 'sync_id' });
-      if (error) { errors.push(`${store}: ${error.message}`); continue; }
+      if (error) { if (store === 'users' && isMissingTable(error.message)) continue; errors.push(`${store}: ${error.message}`); continue; }
       for (const r of chunk) {
         const fresh = await DB.get(store, r.id);
         if (fresh && fresh.updatedAt === r.updatedAt) await DB.put(store, { ...fresh, _dirty: false }, SKIP);
@@ -183,6 +186,7 @@ async function pushChanges() {
   for (const t of tombstones) {
     const { error } = await supaClient.from(t.store).update({ deleted: true, updated_at: new Date().toISOString() }).eq('sync_id', t.syncId);
     if (!error) await DB.delete('tombstones', t.id, { skipTombstone: true, skipNotify: true });
+    else if (t.store === 'users' && isMissingTable(error.message)) continue;
     else errors.push(`${t.store} (حذف): ${error.message}`);
   }
   if (errors.length) throw new Error('فشل الإرسال: ' + errors[0] + (errors.length > 1 ? ` (و${errors.length - 1} خطأ تاني)` : ''));
@@ -247,7 +251,7 @@ async function pullChanges() {
     while (true) {
       const { data: rows, error } = await supaClient.from(store).select('*').gt('updated_at', sinceQuery)
         .order('updated_at', { ascending: true }).range(offset, offset + 999);
-      if (error) { errors.push(`${store}: ${error.message}`); break; }
+      if (error) { if (!(store === 'users' && isMissingTable(error.message))) errors.push(`${store}: ${error.message}`); break; }
       if (!rows || !rows.length) break;
       for (const row of rows) {
         try { changed += await applyRemoteRow(store, row); }
@@ -287,7 +291,7 @@ async function runSyncPass(mode = 'both') {
     if (mode === 'pull' || mode === 'both') result.pulled = (await pullChanges()).pulled;
     await saveSyncConfig({ lastSyncAt: new Date().toISOString(), lastError: null });
     notifySyncStatus('idle');
-    if (result.pulled > 0) refreshViewIfSafe();
+    if (result.pulled > 0) { if (typeof onSyncPulled === 'function') onSyncPulled(); refreshViewIfSafe(); }
   } catch (e) {
     console.error('sync error', e);
     const msg = (e && e.message) ? e.message : String(e);
@@ -364,11 +368,13 @@ async function diagnoseSync(urlRaw, keyRaw) {
       else otherErr = otherErr || error.message;
     }
   }
-  if (missing.length) return { ok: false, needsSql: true, message: `الجداول مش موجودة في Supabase (${missing.length} من ${SYNC_ORDER.length}). انسخ كود الإعداد (SQL) من تحت وشغّله مرة واحدة في Supabase ← SQL Editor ← Run.` };
+  const missingCore = missing.filter(s => s !== 'users');
+  if (missingCore.length) return { ok: false, needsSql: true, message: `الجداول مش موجودة في Supabase (${missingCore.length} من ${SYNC_ORDER.length}). انسخ كود الإعداد (SQL) من تحت وشغّله مرة واحدة في Supabase ← SQL Editor ← Run.` };
   if (otherErr) {
     if (/invalid api key|jwt|apikey/i.test(otherErr)) return { ok: false, message: 'المفتاح (anon key) مش مقبول من Supabase — انسخه تاني من Settings ← API.' };
     if (/failed to fetch|networkerror|load failed/i.test(otherErr)) return { ok: false, message: 'مقدرتش أوصل لـ Supabase — راجع الرابط والإنترنت.' };
     return { ok: false, message: 'خطأ من Supabase: ' + otherErr };
   }
+  if (missing.length) return { ok: true, message: 'الاتصال سليم ✅\nملحوظة: جدول الموظفين لسه ناقص في Supabase. شغّل كود SQL (اللي تحت) تاني مرة لو عايز الموظفين والصلاحيات يتزامنوا بين الأجهزة.' };
   return { ok: true, message: 'الاتصال سليم وكل الجداول موجودة ✅' };
 }

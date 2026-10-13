@@ -22,7 +22,10 @@ async function boot() {
   APP_STATE.clinicInfo = info.value;
   APP_STATE.currency = info.value.currency || 'ج.م';
   document.getElementById('clinic-name-title').textContent = info.value.name;
-  renderSidebar();
+  await loadAuthUsers();
+  if (AUTH.required) await showLoginScreen();
+  applyUserUI();
+  startIdleWatch();
   window.addEventListener('hashchange', route);
   route();
   setupGlobalSearch();
@@ -50,7 +53,7 @@ function setupSidebarToggle() {
 
 function renderSidebar() {
   const nav = document.getElementById('sidebar-nav');
-  nav.innerHTML = ROUTES.map(r => `
+  nav.innerHTML = ROUTES.filter(r => canDo(r.key)).map(r => `
     <a href="#${r.key}" class="nav-item" data-key="${r.key}">
       <span class="nav-icon">${r.icon}</span><span class="nav-label">${r.label}</span>
     </a>`).join('');
@@ -66,6 +69,12 @@ async function route() {
   APP_STATE.route = key;
   setActiveNav(key);
   const main = document.getElementById('main-content');
+  if (!canDo(key)) {
+    const first = ROUTES.find(r => canDo(r.key));
+    if (first && AUTH.user) { location.hash = '#' + first.key; return; }
+    main.innerHTML = '<div class="error-box">ليس لديك صلاحية لفتح هذه الشاشة. كلّم المدير لو محتاجها.</div>';
+    return;
+  }
   main.innerHTML = '<div class="loading">جاري التحميل...</div>';
   U.closeModals();
   try {

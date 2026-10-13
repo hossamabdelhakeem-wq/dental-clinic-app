@@ -48,6 +48,7 @@ Views.settings = async function(main, param) {
     </div>
 
     <div class="card" id="rx-template-card"></div>
+    <div class="card" id="users-card"></div>
     <div class="card" id="sync-card"></div>
   `;
   main.querySelector('#save-clinic-info').addEventListener('click', async () => {
@@ -69,6 +70,7 @@ Views.settings = async function(main, param) {
   showList(LIST_CONFIGS[0].key);
 
   renderRxTemplateCard(main.querySelector('#rx-template-card'));
+  renderUsersCard(main.querySelector('#users-card'));
   renderSyncCard(main.querySelector('#sync-card'));
 };
 

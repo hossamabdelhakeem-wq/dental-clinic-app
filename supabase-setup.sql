@@ -8,7 +8,7 @@ declare
     'patients','appointments','visits','visitServices','services','serviceCategories',
     'payments','expenses','expenseCategories','visitTypes','paymentMethods',
     'appointmentStatuses','patientSources','drugs','prescriptions','prescriptionItems',
-    'prescriptionTemplates','treatmentPlans','doctors'
+    'prescriptionTemplates','treatmentPlans','doctors','users'
   ];
 begin
   foreach t in array tables loop

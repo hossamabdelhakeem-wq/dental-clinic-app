@@ -255,3 +255,27 @@ body {
   .stat-value { font-size: 17px; }
   #clinic-name-title { font-size: 13px; }
 }
+
+/* ===== المستخدمين وشاشة الدخول ===== */
+#user-box { padding: 10px 12px; border-top: 1px solid rgba(255,255,255,.12); color: #fff; font-size: 13px; display: flex; flex-direction: column; gap: 6px; }
+#user-box:empty { display: none; }
+#user-box .btn { background: rgba(255,255,255,.08); color: #fff; border-color: rgba(255,255,255,.15); }
+#login-screen { position: fixed; inset: 0; z-index: 1000; background: linear-gradient(160deg,#0f2647,#163258); align-items: center; justify-content: center; padding: 16px; }
+.login-box { background: #fff; border-radius: 16px; padding: 26px 22px; width: 100%; max-width: 360px; text-align: center; box-shadow: 0 20px 60px rgba(0,0,0,.35); max-height: 94vh; overflow-y: auto; }
+.login-logo { height: 64px; margin-bottom: 8px; }
+.login-box h2 { font-size: 16px; margin: 0 0 10px; color: var(--navy); }
+.login-users { display: flex; flex-direction: column; gap: 8px; margin: 12px 0; }
+.login-user { padding: 12px; font-size: 15px; }
+.pin-dots { display: flex; justify-content: center; gap: 12px; margin: 16px 0; }
+.pin-dots span { width: 14px; height: 14px; border-radius: 50%; border: 2px solid var(--navy); }
+.pin-dots span.on { background: var(--navy); }
+.pin-pad { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 10px 0; direction: ltr; }
+.pin-key { padding: 14px 0; font-size: 20px; border-radius: 12px; border: 1px solid var(--border); background: #f4f6fb; cursor: pointer; font-family: inherit; }
+.pin-key:active { background: #e4e8f0; }
+.login-msg { color: var(--bad); min-height: 20px; font-size: 13px; margin-top: 6px; }
+.login-link { display: inline-block; margin-top: 10px; font-size: 12.5px; color: var(--accent); cursor: pointer; }
+.perm-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 14px; margin-top: 8px; }
+.perm-item { display: flex !important; flex-direction: row !important; align-items: center; gap: 6px; font-size: 13px; color: var(--text) !important; }
+.preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
+.recovery-code { font-family: monospace; font-size: 26px; letter-spacing: 3px; background: #f4f6fb; padding: 14px; border-radius: 10px; text-align: center; margin: 12px 0; direction: ltr; }
+@media (max-width: 600px) { .perm-grid { grid-template-columns: 1fr; } }

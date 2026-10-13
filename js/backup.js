@@ -2,7 +2,7 @@
    backup.js — النسخ الاحتياطي والاستعادة + بيانات تجريبية
    ========================================================= */
 
-const ALL_STORE_NAMES = ['patients','appointments','visits','visitServices','services','serviceCategories','payments','expenses','expenseCategories','visitTypes','paymentMethods','appointmentStatuses','patientSources','drugs','prescriptions','prescriptionItems','prescriptionTemplates','treatmentPlans','doctors','settings'];
+const ALL_STORE_NAMES = ['patients','appointments','visits','visitServices','services','serviceCategories','payments','expenses','expenseCategories','visitTypes','paymentMethods','appointmentStatuses','patientSources','drugs','prescriptions','prescriptionItems','prescriptionTemplates','treatmentPlans','doctors','users','settings'];
 
 Views.backup = async function(main) {
   main.innerHTML = `
@@ -66,6 +66,7 @@ async function doRestore() {
     const text = await fileInput.files[0].text();
     const dump = JSON.parse(text);
     for (const s of ALL_STORE_NAMES) {
+      if (s === 'users' && !Array.isArray(dump.users)) continue; // نسخة قديمة بدون موظفين: ماتمسحش الموظفين الحاليين
       await DB.clear(s);
       if (Array.isArray(dump[s])) for (const item of dump[s]) await DB.put(s, item);
     }

@@ -6,7 +6,7 @@
    ========================================================= */
 
 const DB_NAME = 'dental_clinic_db';
-const DB_VERSION = 1;
+const DB_VERSION = 2;
 let dbInstance = null;
 
 /* الجداول اللي بتتزامن مع السحابة (كل حاجة ماعدا الإعدادات المحلية البحتة) */
@@ -14,7 +14,7 @@ const SYNCED_STORES = [
   'patients','appointments','visits','visitServices','services','serviceCategories',
   'payments','expenses','expenseCategories','visitTypes','paymentMethods',
   'appointmentStatuses','patientSources','drugs','prescriptions','prescriptionItems',
-  'prescriptionTemplates','treatmentPlans','doctors',
+  'prescriptionTemplates','treatmentPlans','doctors','users',
 ];
 
 const STORES = [
@@ -37,6 +37,7 @@ const STORES = [
   { name: 'prescriptionTemplates', keyPath: 'id', autoIncrement: true, indexes: [['syncId','syncId']] },
   { name: 'treatmentPlans', keyPath: 'id', autoIncrement: true, indexes: [['patientId','patientId'],['syncId','syncId']] },
   { name: 'doctors', keyPath: 'id', autoIncrement: true, indexes: [['syncId','syncId']] },
+  { name: 'users', keyPath: 'id', autoIncrement: true, indexes: [['syncId','syncId']] },
   { name: 'settings', keyPath: 'key', autoIncrement: false, indexes: [] },
   { name: 'tombstones', keyPath: 'id', autoIncrement: true, indexes: [['store','store']] },
 ];
@@ -106,6 +107,7 @@ const DB = {
     });
   },
   async delete(store, key, opts = {}) {
+    if (!opts.skipTombstone && store !== 'tombstones' && typeof requirePerm === 'function') requirePerm('delete');
     if (SYNCED_STORES.includes(store) && !opts.skipTombstone) {
       const existing = await DB.get(store, key);
       if (existing && existing.syncId) {
