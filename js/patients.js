@@ -35,11 +35,23 @@ async function renderPatientsList(main) {
         <td>${U.esc(p.gender||'')}</td>
         <td>${U.esc(p.source||'')}</td>
         <td>${U.esc(U.fmtDate(p.createdAt?.slice(0,10)))}</td>
-        <td><a class="btn btn-sm" href="#patients/${p.id}">فتح</a></td>
+        <td style="white-space:nowrap">
+          <a class="btn btn-sm" href="#patients/${p.id}">فتح</a>
+          <button class="btn btn-sm" data-edit-patient="${p.id}">تعديل</button>
+          <button class="btn btn-sm btn-danger" data-del-patient="${p.id}">حذف</button>
+        </td>
       </tr>`).join('') || `<tr><td colspan="7" class="empty-cell">لا يوجد مرضى بعد</td></tr>`;
     tbody.querySelectorAll('.row-click').forEach(tr => tr.addEventListener('click', (e) => {
-      if (e.target.tagName === 'A') return;
+      if (e.target.closest('a,button')) return;
       goto(tr.dataset.href);
+    }));
+    tbody.querySelectorAll('[data-edit-patient]').forEach(b => b.addEventListener('click', () => {
+      const p = patients.find(x => x.id === Number(b.dataset.editPatient));
+      if (p) Views.openEditPatientModal(p, () => route());
+    }));
+    tbody.querySelectorAll('[data-del-patient]').forEach(b => b.addEventListener('click', () => {
+      const p = patients.find(x => x.id === Number(b.dataset.delPatient));
+      if (p) deletePatientFlow(p, () => route());
     }));
   };
   renderRows(patients);
@@ -162,6 +174,7 @@ async function renderPatientProfile(main, patientId) {
       <div class="page-actions">
         <button class="btn" id="btn-wa-patient">واتساب</button>
         <button class="btn" id="btn-edit-patient">تعديل البيانات</button>
+        <button class="btn btn-danger" id="btn-delete-patient">حذف المريض</button>
         <button class="btn" id="btn-print-summary">طباعة ملخص</button>
         <button class="btn" id="btn-export-patient">تصدير Excel</button>
       </div>
@@ -229,6 +242,7 @@ async function renderPatientProfile(main, patientId) {
   await renderPlanHistoryCard(main.querySelector('#plan-history-card'), patient);
 
   main.querySelector('#btn-edit-patient').addEventListener('click', () => Views.openEditPatientModal(patient, () => route()));
+  main.querySelector('#btn-delete-patient').addEventListener('click', () => deletePatientFlow(patient, () => goto('#patients')));
   main.querySelector('#btn-wa-patient').addEventListener('click', () => openWhatsAppQuickActions(patient));
   main.querySelector('#btn-print-summary').addEventListener('click', () => printPatientSummary(patient, visits, payments, {totalServices, totalPaid, remaining, totalDiscount}));
   main.querySelector('#btn-export-patient').addEventListener('click', () => exportPatientExcel(patient, visits, payments));
@@ -334,4 +348,40 @@ async function renderPlanHistoryCard(container, patient) {
     const plan = await DB.get('treatmentPlans', Number(b.dataset.conv));
     Views.openNewVisitModal(patient.id, { prefillService: plan });
   }));
+}
+
+
+/* ---------- حذف مريض (مع كل سجلاته) ---------- */
+async function deletePatientFlow(patient, onDone) {
+  if (typeof canDo === 'function' && !canDo('delete')) { U.toast('ليس لديك صلاحية الحذف', 'error'); return; }
+  const [appts, visits, payments, rxs, plans] = await Promise.all([
+    DB.byIndex('appointments', 'patientId', patient.id), DB.byIndex('visits', 'patientId', patient.id),
+    DB.byIndex('payments', 'patientId', patient.id), DB.byIndex('prescriptions', 'patientId', patient.id),
+    DB.byIndex('treatmentPlans', 'patientId', patient.id),
+  ]);
+  const parts = [];
+  if (visits.length) parts.push(`${visits.length} زيارة`);
+  if (payments.length) parts.push(`${payments.length} دفعة`);
+  if (appts.length) parts.push(`${appts.length} موعد`);
+  if (rxs.length) parts.push(`${rxs.length} روشتة`);
+  if (plans.length) parts.push(`${plans.length} بند في خطة العلاج`);
+  const name = `${patient.fullName} (${patient.fileNumber})`;
+  const msg = parts.length
+    ? `المريض ${name} عنده ${parts.join('، ')}. الحذف هيمسحه هو وكل السجلات دي نهائيًا، ومش هتقدر ترجّعها إلا من نسخة احتياطية. متأكد؟`
+    : `حذف المريض ${name} نهائيًا؟`;
+  if (!(await U.confirm(msg))) return;
+  for (const v of visits) {
+    for (const s of await DB.byIndex('visitServices', 'visitId', v.id)) await DB.delete('visitServices', s.id);
+    await DB.delete('visits', v.id);
+  }
+  for (const x of payments) await DB.delete('payments', x.id);
+  for (const rx of rxs) {
+    for (const it of await DB.byIndex('prescriptionItems', 'prescriptionId', rx.id)) await DB.delete('prescriptionItems', it.id);
+    await DB.delete('prescriptions', rx.id);
+  }
+  for (const a of appts) await DB.delete('appointments', a.id);
+  for (const pl of plans) await DB.delete('treatmentPlans', pl.id);
+  await DB.delete('patients', patient.id);
+  U.toast('تم حذف المريض');
+  onDone();
 }
