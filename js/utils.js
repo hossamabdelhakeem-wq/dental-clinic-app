@@ -7,7 +7,59 @@ const U = {
     n = Number(n || 0);
     return n.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ' + APP_STATE.currency;
   },
-  todayISO() { return new Date().toISOString().slice(0,10); },
+  isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; },
+  todayISO() { return U.isoLocal(new Date()); },
+  enableTableSort(root) {
+    const col = new Intl.Collator('ar', { numeric: true, sensitivity: 'base' });
+    const norm = (t) => t.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.').replace(/[٬,\s]/g, '').replace(/ج\.م$/, '');
+    root.querySelectorAll('table.table').forEach(t => {
+      const tbody = t.tBodies[0];
+      if (t.dataset.sortable || !t.tHead || !tbody || tbody.querySelector('input,select,textarea')) return;
+      t.dataset.sortable = '1';
+      const ths = [...t.tHead.rows[0].cells];
+      const st = { c: -1, dir: 1 };
+      const cellText = (tr, i) => (tr.cells[i] ? tr.cells[i].textContent.trim() : '');
+      const dataRows = () => [...tbody.rows].filter(r => !r.querySelector('td[colspan]'));
+      const detect = (rows, i) => {
+        const v = rows.map(r => norm(cellText(r, i))).filter(Boolean);
+        if (v.length && v.every(x => /^\d{1,2}\/\d{1,2}\/\d{4}/.test(x))) return 'date';
+        if (v.length && v.every(x => /^-?\d+(\.\d+)?$/.test(x))) return 'num';
+        return 'text';
+      };
+      const keyOf = (type, raw) => {
+        const v = norm(raw);
+        if (type === 'date') { const m = v.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})/); return +m[3] * 10000 + +m[2] * 100 + +m[1]; }
+        return type === 'num' ? parseFloat(v) : raw;
+      };
+      let apply;
+      const obs = new MutationObserver(() => apply());
+      apply = () => {
+        if (st.c < 0) return;
+        const rows = dataRows();
+        if (rows.length < 2) return;
+        const type = detect(rows, st.c);
+        rows.sort((a, b) => {
+          const ra = cellText(a, st.c), rb = cellText(b, st.c);
+          if (!ra && !rb) return 0; if (!ra) return 1; if (!rb) return -1;
+          const ka = keyOf(type, ra), kb = keyOf(type, rb);
+          return (type === 'text' ? col.compare(ka, kb) : ka - kb) * st.dir;
+        });
+        obs.disconnect(); rows.forEach(r => tbody.appendChild(r)); obs.observe(tbody, { childList: true });
+      };
+      ths.forEach((th, i) => {
+        if (!th.textContent.trim()) return;
+        th.classList.add('sortable'); th.title = 'اضغط للترتيب';
+        th.addEventListener('click', () => {
+          const type = detect(dataRows(), i);
+          if (st.c === i) st.dir = -st.dir; else { st.c = i; st.dir = type === 'text' ? 1 : -1; }
+          ths.forEach(h => { const s = h.querySelector('.sort-ind'); if (s) s.remove(); });
+          th.insertAdjacentHTML('beforeend', `<span class="sort-ind">${st.dir === 1 ? '▲' : '▼'}</span>`);
+          apply();
+        });
+      });
+      obs.observe(tbody, { childList: true });
+    });
+  },
   fmtDate(iso) {
     if (!iso) return '';
     const [y,m,d] = iso.split('-');
@@ -16,7 +68,7 @@ const U = {
   fmtDateTime(iso) {
     if (!iso) return '';
     const d = new Date(iso);
-    return U.fmtDate(d.toISOString().slice(0,10)) + ' ' + d.toTimeString().slice(0,5);
+    return U.fmtDate(U.isoLocal(d)) + ' ' + d.toTimeString().slice(0,5);
   },
   esc(s) {
     if (s === undefined || s === null) return '';

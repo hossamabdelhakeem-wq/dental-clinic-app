@@ -37,7 +37,7 @@ Views.reports = async function(main) {
 
 function computeRange(rangeKey, fromV, toV) {
   const today = new Date();
-  const iso = (d) => d.toISOString().slice(0,10);
+  const iso = (d) => U.isoLocal(d);
   let from, to;
   if (rangeKey === 'today') { from = to = iso(today); }
   else if (rangeKey === 'yesterday') { const y = new Date(today); y.setDate(y.getDate()-1); from = to = iso(y); }

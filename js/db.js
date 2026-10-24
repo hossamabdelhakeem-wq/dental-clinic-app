@@ -265,7 +265,7 @@ async function loadDemoData() {
     const pid = patientIds[Math.floor(Math.random()*patientIds.length)];
     const d = new Date(); d.setDate(d.getDate() + Math.floor(Math.random()*20) - 10);
     await DB.add('appointments', {
-      patientId: pid, date: d.toISOString().slice(0,10), time: `${9+Math.floor(Math.random()*8)}:00`,
+      patientId: pid, date: U.isoLocal(d), time: `${9+Math.floor(Math.random()*8)}:00`,
       duration: 30, visitType: visitTypes[Math.floor(Math.random()*visitTypes.length)].name,
       expectedService: '', status: statuses[Math.floor(Math.random()*statuses.length)].name, notes: '', createdAt: new Date().toISOString(),
     });
@@ -277,17 +277,17 @@ async function loadDemoData() {
     const total = 200 + Math.floor(Math.random()*4800); // سعر يدوي تجريبي عشوائي لكل حالة (لا يوجد سعر افتراضي للخدمة)
     const paid = Math.random() > 0.4 ? total : Math.floor(total * 0.5);
     const visitId = await DB.add('visits', {
-      patientId: pid, appointmentId: null, date: d.toISOString().slice(0,10), visitType: visitTypes[Math.floor(Math.random()*visitTypes.length)].name,
+      patientId: pid, appointmentId: null, date: U.isoLocal(d), visitType: visitTypes[Math.floor(Math.random()*visitTypes.length)].name,
       diagnosis: '', doctorNotes: '', discountType: 'fixed', discountValue: 0,
       subtotal: total, total, paid, remaining: total - paid, createdAt: d.toISOString(), isDeleted: false,
     });
     await DB.add('visitServices', { visitId, serviceId: svc.id, serviceName: svc.name, tooth: '', price: total, qty: 1 });
-    if (paid > 0) await DB.add('payments', { patientId: pid, visitId, date: d.toISOString().slice(0,10), amount: paid, method: methods[Math.floor(Math.random()*methods.length)].name, notes: '', createdAt: d.toISOString() });
+    if (paid > 0) await DB.add('payments', { patientId: pid, visitId, date: U.isoLocal(d), amount: paid, method: methods[Math.floor(Math.random()*methods.length)].name, notes: '', createdAt: d.toISOString() });
   }
   const expCats = await DB.all('expenseCategories');
   for (let i = 0; i < 12; i++) {
     const d = new Date(); d.setDate(d.getDate() - Math.floor(Math.random()*60));
-    await DB.add('expenses', { date: d.toISOString().slice(0,10), categoryId: expCats[Math.floor(Math.random()*expCats.length)].id, description: 'مصروف تجريبي', amount: Math.floor(100+Math.random()*2000), method: methods[Math.floor(Math.random()*methods.length)].name, notes: '' });
+    await DB.add('expenses', { date: U.isoLocal(d), categoryId: expCats[Math.floor(Math.random()*expCats.length)].id, description: 'مصروف تجريبي', amount: Math.floor(100+Math.random()*2000), method: methods[Math.floor(Math.random()*methods.length)].name, notes: '' });
   }
 }
 

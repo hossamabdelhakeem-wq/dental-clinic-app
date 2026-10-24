@@ -25,7 +25,7 @@ Views.dashboard = async function(main) {
   const outstanding = activeVisits.reduce((s,v)=>s+Number(v.remaining||0),0);
 
   // last 14 days revenue
-  const days = [...Array(14)].map((_,i) => { const d = new Date(); d.setDate(d.getDate() - (13-i)); return d.toISOString().slice(0,10); });
+  const days = [...Array(14)].map((_,i) => { const d = new Date(); d.setDate(d.getDate() - (13-i)); return U.isoLocal(d); });
   const revenueByDay = days.map(d => payments.filter(p => p.date === d).reduce((s,p)=>s+Number(p.amount),0));
 
   // expenses by category (this month)

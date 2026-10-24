@@ -192,6 +192,7 @@ async function renderVisitDetail(main, visitId) {
       </div>
       <div class="page-actions">
         <button class="btn" id="btn-add-payment">+ تسجيل دفعة</button>
+        <button class="btn" id="btn-edit-visit-date">تعديل التاريخ</button>
         <button class="btn" id="btn-print-visit">طباعة</button>
       </div>
     </div>
@@ -222,6 +223,16 @@ async function renderVisitDetail(main, visitId) {
       </div>
     </div>`;
   main.querySelector('#btn-add-payment').addEventListener('click', () => Views.openAddPaymentModal(patient.id, visitId, () => route()));
+  main.querySelector('#btn-edit-visit-date').addEventListener('click', () => {
+    const ov = U.openModal('تعديل تاريخ الزيارة', `<label>التاريخ<input type="date" id="vd-input" class="input" value="${visit.date}"></label>`,
+      '<button class="btn btn-secondary" data-close>إلغاء</button><button class="btn btn-primary" id="vd-save">حفظ</button>');
+    ov.querySelector('#vd-save').addEventListener('click', async () => {
+      const nd = ov.querySelector('#vd-input').value; if (!nd) return;
+      await DB.put('visits', { ...visit, date: nd });
+      for (const p of payments) if (p.date === visit.date) await DB.put('payments', { ...p, date: nd });
+      ov.remove(); U.toast('تم تحديث التاريخ'); route();
+    });
+  });
   main.querySelector('#btn-print-visit').addEventListener('click', () => {
     const info = APP_STATE.clinicInfo;
     U.printSection(`

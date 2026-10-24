@@ -33,6 +33,8 @@ async function boot() {
   setupSyncIndicator();
   initSyncEngine();
   setupSidebarToggle();
+  const mainEl = document.getElementById('main-content');
+  new MutationObserver(U.debounce(() => U.enableTableSort(mainEl), 60)).observe(mainEl, { childList: true, subtree: true });
 }
 
 function setupSidebarToggle() {

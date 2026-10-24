@@ -73,6 +73,7 @@ Views.openNewPatientModal = function(onSaved) {
         <label>رقم الموبايل *<input required name="phone" class="input" placeholder="01xxxxxxxxx"></label>
         <label>رقم موبايل بديل<input name="altPhone" class="input"></label>
         <label>تاريخ الميلاد<input type="date" name="dob" class="input"></label>
+        <label>تاريخ التسجيل<input type="date" name="createdAt" class="input" value="${U.todayISO()}"></label>
         <label>النوع
           <select name="gender" class="input">
             <option value="ذكر">ذكر</option><option value="أنثى">أنثى</option>
@@ -94,7 +95,7 @@ Views.openNewPatientModal = function(onSaved) {
       if (!form.reportValidity()) return;
       const data = Object.fromEntries(new FormData(form).entries());
       const fileNumber = await nextFileNumber();
-      const id = await DB.add('patients', { ...data, fileNumber, createdAt: new Date().toISOString(), isDeleted: false });
+      const id = await DB.add('patients', { ...data, fileNumber, createdAt: data.createdAt || U.todayISO(), isDeleted: false });
       U.toast(`تم إنشاء المريض برقم ملف ${fileNumber}`);
       overlay.remove();
       if (onSaved) onSaved(id);
@@ -125,6 +126,7 @@ Views.openEditPatientModal = function(patient, onSaved) {
         <label>رقم الموبايل *<input required name="phone" class="input" value="${U.esc(patient.phone)}"></label>
         <label>رقم موبايل بديل<input name="altPhone" class="input" value="${U.esc(patient.altPhone||'')}"></label>
         <label>تاريخ الميلاد<input type="date" name="dob" class="input" value="${U.esc(patient.dob||'')}"></label>
+        <label>تاريخ التسجيل<input type="date" name="createdAt" class="input" value="${U.esc((patient.createdAt||'').slice(0,10))}"></label>
         <label>النوع
           <select name="gender" class="input">
             <option value="ذكر" ${patient.gender==='ذكر'?'selected':''}>ذكر</option>
@@ -146,6 +148,7 @@ Views.openEditPatientModal = function(patient, onSaved) {
       const form = overlay.querySelector('#patient-edit-form');
       if (!form.reportValidity()) return;
       const data = Object.fromEntries(new FormData(form).entries());
+      if (!data.createdAt) data.createdAt = patient.createdAt || U.todayISO();
       await DB.put('patients', { ...patient, ...data });
       U.toast('تم حفظ التعديلات');
       overlay.remove();

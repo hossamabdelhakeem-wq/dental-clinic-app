@@ -279,3 +279,7 @@ body {
 .preset-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 6px; }
 .recovery-code { font-family: monospace; font-size: 26px; letter-spacing: 3px; background: #f4f6fb; padding: 14px; border-radius: 10px; text-align: center; margin: 12px 0; direction: ltr; }
 @media (max-width: 600px) { .perm-grid { grid-template-columns: 1fr; } }
+
+.table th.sortable { cursor: pointer; user-select: none; }
+.table th.sortable:hover { color: var(--accent); }
+.sort-ind { font-size: 10px; margin-right: 4px; color: var(--accent); }

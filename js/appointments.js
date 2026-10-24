@@ -45,7 +45,7 @@ function shiftAnchor(dir) {
   apptAnchorDate = d;
 }
 
-function isoDate(d) { return d.toISOString().slice(0,10); }
+function isoDate(d) { return U.isoLocal(d); }
 function startOfWeek(d) { const x = new Date(d); const day = x.getDay(); x.setDate(x.getDate() - day); return x; }
 
 async function renderAppointmentsCalendar() {
