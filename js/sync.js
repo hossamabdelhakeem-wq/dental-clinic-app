@@ -184,7 +184,7 @@ async function pushChanges() {
   }
   const tombstones = await DB.all('tombstones');
   for (const t of tombstones) {
-    const { error } = await supaClient.from(t.store).update({ deleted: true, updated_at: new Date().toISOString() }).eq('sync_id', t.syncId);
+    const { error } = await supaClient.from(t.store).update({ deleted: true, data: { _v: 2 }, updated_at: new Date().toISOString() }).eq('sync_id', t.syncId);
     if (!error) await DB.delete('tombstones', t.id, { skipTombstone: true, skipNotify: true });
     else if (t.store === 'users' && isMissingTable(error.message)) continue;
     else errors.push(`${t.store} (حذف): ${error.message}`);

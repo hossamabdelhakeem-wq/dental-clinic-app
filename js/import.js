@@ -330,7 +330,7 @@ async function runImportLedger(overlay) {
       const extra = p.phones.length > 2 ? ` — أرقام إضافية: ${p.phones.slice(2).join(' ، ')}` : '';
       const id = await DB.add('patients', {
         fileNumber, fullName: p.name, phone: p.phones[0] || '', altPhone: p.phones[1] || '', dob: '', gender: '', address: '',
-        source: 'أخرى', notes: 'تم الاستيراد من شيت قديم' + extra, createdAt: p.minDate || today, isDeleted: false,
+        source: 'أخرى', notes: 'تم الاستيراد من شيت قديم' + extra, createdAt: p.minDate || today, isDeleted: false, importedFrom: 'legacy-sheet',
       });
       byFile[fileNumber] = { id, fileNumber, fullName: p.name };
       patientsCreated++;
@@ -499,7 +499,7 @@ async function runImportPatients(overlay) {
       Object.keys(data).forEach(k => { if (data[k] && !ex[k]) upd[k] = data[k]; });
       if (Object.keys(upd).length) { await DB.put('patients', { ...ex, ...upd }); updated++; }
     } else {
-      const id = await DB.add('patients', { fileNumber, fullName: name, ...data, source: data.source || 'أخرى', createdAt: '', isDeleted: false });
+      const id = await DB.add('patients', { fileNumber, fullName: name, ...data, source: data.source || 'أخرى', createdAt: '', isDeleted: false, importedFrom: 'legacy-sheet' });
       byFile[fileNumber] = { id, fileNumber, fullName: name };
       created++;
     }
@@ -511,4 +511,63 @@ async function runImportPatients(overlay) {
       ${statCard('مرضى جدد', created)}${statCard('مرضى اتكملت بياناتهم', updated)}${statCard('صفوف ناقصة (بدون رقم ملف/اسم)', skipped, skipped)}
     </div>
     <p class="muted">البيانات الموجودة بالفعل عند المريض ما اتغيّرتش، اتضاف بس اللي كان فاضي.</p>`, null);
+}
+
+
+/* ---------- حذف البيانات المستوردة فقط (من الشيت / Google Forms) ---------- */
+async function analyzeImported() {
+  const names = ['patients', 'visits', 'visitServices', 'payments', 'appointments', 'prescriptions', 'treatmentPlans', 'expenses', 'services', 'serviceCategories'];
+  const [patients, visits, vsv, payments, appts, rxs, plans, expenses, services, cats] = await Promise.all(names.map(n => DB.all(n)));
+  const impVisitIds = new Set(visits.filter(v => v.importedFrom === 'legacy-sheet').map(v => v.id));
+  const isImpPay = (p) => p.visitId && impVisitIds.has(p.visitId) && p.notes === 'مستورد من الشيت القديم';
+  const manualVisit = new Set(); // زيارات مستوردة عليها بيانات مدخلة يدويًا: بتتحفظ
+  payments.forEach(p => { if (p.visitId && impVisitIds.has(p.visitId) && !isImpPay(p)) manualVisit.add(p.visitId); });
+  rxs.forEach(r => { if (r.visitId && impVisitIds.has(r.visitId)) manualVisit.add(r.visitId); });
+  plans.forEach(t => { if (t.convertedVisitId && impVisitIds.has(t.convertedVisitId)) manualVisit.add(t.convertedVisitId); });
+  const delVisits = visits.filter(v => impVisitIds.has(v.id) && !manualVisit.has(v.id));
+  const delVisitIds = new Set(delVisits.map(v => v.id));
+  const delPayments = payments.filter(p => isImpPay(p) && delVisitIds.has(p.visitId));
+  const delPayIds = new Set(delPayments.map(p => p.id));
+  const delVS = vsv.filter(s => delVisitIds.has(s.visitId));
+  const isImpPatient = (p) => p.importedFrom === 'legacy-sheet' || String(p.notes || '').startsWith('تم الاستيراد من شيت قديم');
+  const hasLeft = (pid) => visits.some(v => v.patientId === pid && !delVisitIds.has(v.id)) || payments.some(p => p.patientId === pid && !delPayIds.has(p.id))
+    || appts.some(a => a.patientId === pid) || rxs.some(r => r.patientId === pid) || plans.some(t => t.patientId === pid);
+  const delPatients = patients.filter(p => isImpPatient(p) && !hasLeft(p.id));
+  const delExpenses = expenses.filter(e => e.importedFrom === 'legacy-sheet');
+  const usedSvc = new Set(vsv.filter(s => !delVisitIds.has(s.visitId)).map(s => s.serviceId));
+  const delServices = services.filter(s => s.notes === 'مستوردة تلقائيًا' && !usedSvc.has(s.id));
+  const delSvcIds = new Set(delServices.map(s => s.id));
+  const impCat = cats.find(c => c.name === 'بيانات مستوردة');
+  const delCats = impCat && !services.some(s => s.categoryId === impCat.id && !delSvcIds.has(s.id)) ? [impCat] : [];
+  const plan = [['payments', 'دفعة', delPayments], ['visitServices', 'خدمة داخل زيارة', delVS], ['visits', 'زيارة', delVisits], ['patients', 'مريض', delPatients],
+    ['expenses', 'مصروف', delExpenses], ['services', 'خدمة مستوردة', delServices], ['serviceCategories', 'تصنيف مستورد', delCats]];
+  const total = plan.reduce((s, x) => s + x[2].length, 0);
+  const keptImportedPatients = patients.filter(isImpPatient).length - delPatients.length;
+  const kept = { patients: patients.length - delPatients.length, visits: visits.length - delVisits.length, payments: payments.length - delPayments.length, expenses: expenses.length - delExpenses.length };
+  return { plan, total, kept, keptImportedPatients, keptImportedVisits: manualVisit.size };
+}
+
+async function openPurgeImportedWizard() {
+  if (!canDo('delete')) { U.toast('ليس لديك صلاحية الحذف', 'error'); return; }
+  const a = await analyzeImported();
+  const rowsHTML = a.plan.filter(x => x[2].length).map(x => `<tr><td>${x[1]}</td><td>${x[2].length}</td></tr>`).join('');
+  const overlay = U.openModal('حذف البيانات المستوردة', a.total === 0
+    ? '<p>مفيش بيانات مستوردة مؤكدة المصدر عشان تتحذف.</p>'
+    : `<p>هيتحذف <b>${a.total}</b> سجل نهائيًا من البرنامج ومن السحابة (مش مجرد إخفاء). السجلات دي بس اللي ثبت إنها اتستوردت من الشيت:</p>
+       <div class="table-wrap"><table class="table table-compact"><tbody>${rowsHTML}</tbody></table></div>
+       <div class="card" style="margin-top:10px"><b>اللي هيتحفظ كما هو:</b> كل البيانات المدخلة يدويًا أو اللي مصدرها مش مؤكد
+         (مرضى: ${a.kept.patients} • زيارات: ${a.kept.visits} • دفعات: ${a.kept.payments} • مصروفات: ${a.kept.expenses}).
+         ${a.keptImportedPatients || a.keptImportedVisits ? `<br><span class="muted-sm">منهم ${a.keptImportedPatients} مريض و${a.keptImportedVisits} زيارة مستوردة اتحفظوا لأن عليهم بيانات مدخلة يدويًا.</span>` : ''}</div>
+       <p class="muted-sm">الاستيراد اليدوي من الشيت هيفضل متاح بعد الحذف. ننصح بنسخة احتياطية الأول.</p>`,
+    `<button class="btn btn-secondary" data-close>إلغاء</button>${a.total ? `<button class="btn btn-danger" id="purge-go">حذف ${a.total} سجل نهائيًا</button>` : ''}`);
+  const go = overlay.querySelector('#purge-go');
+  if (!go) return;
+  go.addEventListener('click', async () => {
+    go.disabled = true;
+    try {
+      let n = 0;
+      for (const [store, , list] of a.plan) for (const r of list) { await DB.delete(store, r.id); n++; if (n % 50 === 0) go.textContent = `جاري الحذف... ${n} / ${a.total}`; }
+      overlay.remove(); U.toast(`تم حذف ${n} سجل مستورد`); route();
+    } catch (e) { go.disabled = false; U.toast('توقف الحذف: ' + e.message, 'error'); }
+  });
 }

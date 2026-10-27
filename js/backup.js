@@ -24,6 +24,11 @@ Views.backup = async function(main) {
       <button class="btn" id="btn-open-import">استيراد من ملف Excel / CSV</button>
     </div>
     <div class="card">
+      <h3>حذف البيانات المستوردة</h3>
+      <p class="muted">بيحذف بس السجلات اللي اتستوردت من الشيت / Google Forms، وبيحتفظ بكل اللي اتدخل يدويًا. بيوريك العدد وبيطلب تأكيد قبل الحذف.</p>
+      <button class="btn btn-danger" id="btn-purge-imported">حذف البيانات المستوردة</button>
+    </div>
+    <div class="card">
       <h3>بيانات تجريبية (Demo)</h3>
       <p class="muted">لتجربة النظام يمكنك تحميل بيانات تجريبية (10 مرضى، 20 موعد، زيارات ومدفوعات ومصروفات)، ويمكن حذفها بسهولة لاحقًا.</p>
       <button class="btn" id="btn-load-demo">تحميل بيانات تجريبية</button>
@@ -33,6 +38,7 @@ Views.backup = async function(main) {
   main.querySelector('#btn-backup-now').addEventListener('click', doBackup);
   main.querySelector('#btn-restore-now').addEventListener('click', doRestore);
   main.querySelector('#btn-open-import').addEventListener('click', () => openImportWizard());
+  main.querySelector('#btn-purge-imported').addEventListener('click', () => openPurgeImportedWizard());
   main.querySelector('#btn-load-demo').addEventListener('click', async () => {
     if (await U.confirm('سيتم إضافة بيانات تجريبية للنظام. متابعة؟')) {
       await loadDemoData(); U.toast('تم تحميل البيانات التجريبية'); route();
