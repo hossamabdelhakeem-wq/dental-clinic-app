@@ -219,11 +219,11 @@ async function renderPatientProfile(main, patientId) {
         <h3>سجل المدفوعات</h3>
         <div class="table-wrap">
           <table class="table table-compact">
-            <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th></tr></thead>
+            <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th></th></tr></thead>
             <tbody>
               ${payments.sort((a,b)=>b.date.localeCompare(a.date)).map(p => `<tr>
-                <td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td>
-              </tr>`).join('') || `<tr><td colspan="3" class="empty-cell">لا توجد مدفوعات</td></tr>`}
+                <td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button></td>
+              </tr>`).join('') || `<tr><td colspan="4" class="empty-cell">لا توجد مدفوعات</td></tr>`}
             </tbody>
           </table>
         </div>
@@ -252,6 +252,7 @@ async function renderPatientProfile(main, patientId) {
   main.querySelector('#qa-new-visit').addEventListener('click', () => Views.openNewVisitModal(patient.id));
   main.querySelector('#qa-new-appt').addEventListener('click', () => Views.openNewAppointmentModal(patient.id));
   main.querySelector('#qa-add-payment').addEventListener('click', () => Views.openAddPaymentModal(patient.id, null, () => route()));
+  bindPaymentEdit(main);
   main.querySelector('#qa-new-rx').addEventListener('click', () => Views.openNewPrescriptionModal(patient.id, null, () => route()));
   main.querySelector('#qa-new-plan').addEventListener('click', () => Views.openNewTreatmentPlanModal(patient.id, () => route()));
 }

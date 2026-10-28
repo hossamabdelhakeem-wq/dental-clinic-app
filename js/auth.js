@@ -241,7 +241,7 @@ async function onSyncPulled() {
     };
   };
   [['openNewPatientModal', 'patients'], ['openEditPatientModal', 'patients'], ['openNewAppointmentModal', 'appointments'],
-   ['openNewVisitModal', 'visits'], ['openAddPaymentModal', 'payments'], ['openNewPrescriptionModal', 'prescriptions'],
+   ['openNewVisitModal', 'visits'], ['openAddPaymentModal', 'payments'], ['openEditPaymentModal', 'payments'], ['openNewPrescriptionModal', 'prescriptions'],
    ['viewPrescription', 'prescriptions'], ['openNewTreatmentPlanModal', 'treatmentplans'], ['openNewExpenseModal', 'expenses']]
     .forEach(([n, p]) => guard(n, p));
 })();

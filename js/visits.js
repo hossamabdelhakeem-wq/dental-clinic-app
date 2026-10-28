@@ -217,12 +217,13 @@ async function renderVisitDetail(main, visitId) {
       <div class="card">
         <h3>الدفعات المرتبطة بهذه الزيارة</h3>
         <table class="table table-compact">
-          <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th></tr></thead>
-          <tbody>${payments.map(p => `<tr><td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td></tr>`).join('') || `<tr><td colspan="3" class="empty-cell">لا توجد دفعات</td></tr>`}</tbody>
+          <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th></th></tr></thead>
+          <tbody>${payments.map(p => `<tr><td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button></td></tr>`).join('') || `<tr><td colspan="4" class="empty-cell">لا توجد دفعات</td></tr>`}</tbody>
         </table>
       </div>
     </div>`;
   main.querySelector('#btn-add-payment').addEventListener('click', () => Views.openAddPaymentModal(patient.id, visitId, () => route()));
+  bindPaymentEdit(main);
   main.querySelector('#btn-edit-visit-date').addEventListener('click', () => {
     const ov = U.openModal('تعديل تاريخ الزيارة', `<label>التاريخ<input type="date" id="vd-input" class="input" value="${visit.date}"></label>`,
       '<button class="btn btn-secondary" data-close>إلغاء</button><button class="btn btn-primary" id="vd-save">حفظ</button>');

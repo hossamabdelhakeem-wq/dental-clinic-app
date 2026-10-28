@@ -14,13 +14,14 @@ Views.payments = async function(main) {
       </div>
     </div>
     <div class="table-wrap"><table class="table">
-      <thead><tr><th>التاريخ</th><th>المريض</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th></tr></thead>
+      <thead><tr><th>التاريخ</th><th>المريض</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th><th></th></tr></thead>
       <tbody>${payments.map(p => `<tr>
         <td>${U.fmtDate(p.date)}</td><td><a href="#patients/${p.patientId}">${U.esc((patients[p.patientId]||{}).fullName||'')}</a></td>
-        <td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td>${U.esc(p.notes||'')}</td>
-      </tr>`).join('') || `<tr><td colspan="5" class="empty-cell">لا توجد مدفوعات</td></tr>`}</tbody>
+        <td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td>${U.esc(p.notes||'')}</td><td><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button></td>
+      </tr>`).join('') || `<tr><td colspan="6" class="empty-cell">لا توجد مدفوعات</td></tr>`}</tbody>
     </table></div>`;
   main.querySelector('#btn-new-payment').addEventListener('click', () => Views.openAddPaymentModal(null, null, () => route()));
+  bindPaymentEdit(main);
   main.querySelector('#btn-export-payments').addEventListener('click', () => {
     U.exportToExcel([{ name: 'المدفوعات', rows: payments.map(p => ({
       'التاريخ': U.fmtDate(p.date), 'المريض': (patients[p.patientId]||{}).fullName||'', 'المبلغ': p.amount, 'الطريقة': p.method, 'ملاحظات': p.notes||''
@@ -90,3 +91,38 @@ Views.openAddPaymentModal = function(patientId, visitId, onSaved) {
     });
   });
 };
+
+
+/* تعديل دفعة: بيحدّث نفس السجل (مش بيضيف دفعة جديدة) وبيعدّل مدفوع/متبقي الزيارة بالفرق */
+Views.openEditPaymentModal = async function(paymentId, onSaved) {
+  const [p, methods] = await Promise.all([DB.get('payments', paymentId), DB.all('paymentMethods')]);
+  if (!p) return;
+  const names = methods.map(m => m.name); if (p.method && !names.includes(p.method)) names.unshift(p.method);
+  const overlay = U.openModal('تعديل الدفعة', `
+    <form id="payment-edit-form" class="form-grid">
+      <label>المبلغ *<input required type="number" name="amount" class="input" min="1" value="${p.amount}"></label>
+      <label>تاريخ الدفع<input type="date" name="date" class="input" value="${p.date}"></label>
+      <label>طريقة الدفع<select name="method" class="input">${names.map(n => `<option ${n === p.method ? 'selected' : ''}>${U.esc(n)}</option>`).join('')}</select></label>
+      <label>ملاحظات<input name="notes" class="input" value="${U.esc(p.notes || '')}"></label>
+    </form>`, '<button class="btn btn-secondary" data-close>إلغاء</button><button class="btn btn-primary" id="save-pay-edit">حفظ التعديل</button>');
+  overlay.querySelector('#save-pay-edit').addEventListener('click', async () => {
+    const f = overlay.querySelector('#payment-edit-form');
+    if (!f.reportValidity()) return;
+    const d = Object.fromEntries(new FormData(f).entries());
+    const amount = Number(d.amount);
+    if (!(amount > 0) || !d.date) { U.toast('المبلغ والتاريخ مطلوبين', 'error'); return; }
+    const v = p.visitId ? await DB.get('visits', p.visitId) : null;
+    const delta = amount - Number(p.amount);
+    if (v && v.importedFrom !== 'legacy-sheet' && Number(v.paid) + delta > Number(v.total)
+        && !(await U.confirm(`إجمالي المدفوع على الزيارة هيبقى أكبر من تكلفتها (${U.money(v.total)}). متابعة؟`))) return;
+    await DB.put('payments', { ...p, amount, date: d.date, method: d.method, notes: d.notes || '' });
+    if (v && delta !== 0) {
+      const paid = Number(v.paid) + delta;
+      const remaining = v.importedFrom === 'legacy-sheet' ? Number(v.remaining) - delta : Math.max(0, Number(v.total) - paid);
+      await DB.put('visits', { ...v, paid, remaining });
+    }
+    U.toast('تم تعديل الدفعة'); overlay.remove();
+    if (onSaved) onSaved();
+  });
+};
+const bindPaymentEdit = (root) => root.querySelectorAll('[data-edit-pay]').forEach(b => b.addEventListener('click', () => Views.openEditPaymentModal(Number(b.dataset.editPay), () => route())));
