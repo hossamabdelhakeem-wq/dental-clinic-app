@@ -118,12 +118,48 @@ const U = {
         <div class="modal-body">${bodyHTML}</div>
         ${footerHTML ? `<div class="modal-footer">${footerHTML}</div>` : ''}
       </div>`;
-    overlay.addEventListener('click', (e) => {
-      if (e.target === overlay || e.target.hasAttribute('data-close')) overlay.remove();
+    let dirty = false;
+    const markDirty = (e) => { const t = e.target; if (t.type === 'file' || t.classList.contains('select-filter') || !t.closest('.modal-body')) return; dirty = true; };
+    overlay.addEventListener('input', markDirty); overlay.addEventListener('change', markDirty);
+    overlay.addEventListener('click', async (e) => {
+      if (e.target === overlay || e.target.hasAttribute('data-close')) {
+        if (dirty && !opts.noGuard && !(await U.confirm('فيه بيانات لسه ما اتحفظتش. تقفل من غير حفظ؟'))) return;
+        overlay.remove();
+      }
     });
     document.body.appendChild(overlay);
+    overlay.querySelectorAll('select[name="patientId"]:not([disabled])').forEach(U.searchableSelect);
     return overlay;
   },
+  /* بحث فوري داخل قائمة المرضى: اكتب جزء من الاسم أو رقم الملف */
+  searchableSelect(sel) {
+    if (sel.dataset.ss) return; sel.dataset.ss = '1';
+    const inp = document.createElement('input');
+    inp.type = 'text'; inp.className = 'input select-filter'; inp.placeholder = '🔍 اكتب اسم المريض أو رقم الملف للبحث...';
+    sel.parentNode.insertBefore(inp, sel);
+    const opts = [...sel.options];
+    const reset = () => { inp.value = ''; opts.forEach(o => { o.hidden = false; }); sel.size = 1; };
+    sel.addEventListener('change', () => { if (!sel._ssBusy) reset(); });
+    inp.addEventListener('input', () => {
+      const q = inp.value.trim().toLowerCase();
+      if (!q) { reset(); return; }
+      opts.forEach(o => { o.hidden = o.value !== '' && !o.textContent.toLowerCase().includes(q); });
+      const vis = opts.filter(o => !o.hidden && o.value !== '');
+      sel.size = Math.min(6, Math.max(2, vis.length + 1));
+      if (vis.length) { sel._ssBusy = true; sel.value = vis[0].value; sel.dispatchEvent(new Event('change', { bubbles: true })); sel._ssBusy = false; }
+    });
+    inp.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') { e.preventDefault(); reset(); }
+      else if (e.key === 'ArrowDown') { e.preventDefault(); sel.focus(); }
+    });
+  },
+  normPhone(p) {
+    let d = String(p || '').replace(/[^\d]/g, '');
+    if (d.startsWith('0020')) d = d.slice(4); else if (d.startsWith('20') && d.length === 12) d = d.slice(2);
+    if (/^1\d{9}$/.test(d)) d = '0' + d;
+    return d;
+  },
+  validPhone(p) { return /^01[0-25]\d{8}$/.test(U.normPhone(p)); },
   closeModals() { document.querySelectorAll('.modal-overlay').forEach(m => m.remove()); },
 
   waPhone(phone) {

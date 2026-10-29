@@ -10,6 +10,7 @@ const ROUTES = [
   { key: 'prescriptions', label: 'الروشتات', icon: '💊' },
   { key: 'treatmentplans', label: 'خطط العلاج', icon: '🗂️' },
   { key: 'payments', label: 'المدفوعات', icon: '💰' },
+  { key: 'debts', label: 'المديونيات', icon: '📋' },
   { key: 'expenses', label: 'المصروفات', icon: '🧾' },
   { key: 'reports', label: 'التقارير', icon: '📊' },
   { key: 'settings', label: 'الإعدادات', icon: '⚙️' },

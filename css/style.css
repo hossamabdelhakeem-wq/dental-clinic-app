@@ -283,3 +283,5 @@ body {
 .table th.sortable { cursor: pointer; user-select: none; }
 .table th.sortable:hover { color: var(--accent); }
 .sort-ind { font-size: 10px; margin-right: 4px; color: var(--accent); }
+
+.select-filter { margin-bottom: 6px; }

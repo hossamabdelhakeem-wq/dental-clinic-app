@@ -17,7 +17,7 @@ Views.payments = async function(main) {
       <thead><tr><th>التاريخ</th><th>المريض</th><th>المبلغ</th><th>الطريقة</th><th>ملاحظات</th><th></th></tr></thead>
       <tbody>${payments.map(p => `<tr>
         <td>${U.fmtDate(p.date)}</td><td><a href="#patients/${p.patientId}">${U.esc((patients[p.patientId]||{}).fullName||'')}</a></td>
-        <td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td>${U.esc(p.notes||'')}</td><td><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button></td>
+        <td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td>${U.esc(p.notes||'')}</td><td style="white-space:nowrap"><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button> <button class="btn btn-sm btn-danger" data-del-pay="${p.id}">حذف</button></td>
       </tr>`).join('') || `<tr><td colspan="6" class="empty-cell">لا توجد مدفوعات</td></tr>`}</tbody>
     </table></div>`;
   main.querySelector('#btn-new-payment').addEventListener('click', () => Views.openAddPaymentModal(null, null, () => route()));
@@ -125,4 +125,53 @@ Views.openEditPaymentModal = async function(paymentId, onSaved) {
     if (onSaved) onSaved();
   });
 };
-const bindPaymentEdit = (root) => root.querySelectorAll('[data-edit-pay]').forEach(b => b.addEventListener('click', () => Views.openEditPaymentModal(Number(b.dataset.editPay), () => route())));
+const bindPaymentEdit = (root) => {
+  root.querySelectorAll('[data-edit-pay]').forEach(b => b.addEventListener('click', () => Views.openEditPaymentModal(Number(b.dataset.editPay), () => route())));
+  root.querySelectorAll('[data-del-pay]').forEach(b => b.addEventListener('click', () => Views.deletePayment(Number(b.dataset.delPay), () => route())));
+};
+Views.deletePayment = async function(paymentId, onDone) {
+  if (!canDo('delete')) { U.toast('ليس لديك صلاحية الحذف', 'error'); return; }
+  const p = await DB.get('payments', paymentId); if (!p) return;
+  if (!(await U.confirm(`حذف دفعة ${U.money(p.amount)} بتاريخ ${U.fmtDate(p.date)} نهائيًا؟ المتبقي على الزيارة هيزيد بنفس المبلغ.`))) return;
+  const v = p.visitId ? await DB.get('visits', p.visitId) : null;
+  await DB.delete('payments', paymentId);
+  if (v) {
+    const paid = Number(v.paid) - Number(p.amount);
+    const remaining = v.importedFrom === 'legacy-sheet' ? Number(v.remaining) + Number(p.amount) : Math.max(0, Number(v.total) - paid);
+    await DB.put('visits', { ...v, paid, remaining });
+  }
+  U.toast('تم حذف الدفعة'); if (onDone) onDone();
+};
+
+/* شاشة المديونيات: المرضى اللي عليهم مبالغ، الأكبر أولًا، مع دفع سريع وواتساب */
+Views.debts = async function(main) {
+  const [patients, visits, payments] = await Promise.all([DB.all('patients'), DB.all('visits'), DB.all('payments')]);
+  const clinic = (APP_STATE.clinicInfo && APP_STATE.clinicInfo.name) || 'العيادة';
+  const rows = [];
+  patients.filter(p => !p.isDeleted).forEach(p => {
+    const vs = visits.filter(v => v.patientId === p.id && !v.isDeleted);
+    const owed = vs.reduce((s, v) => s + Number(v.remaining || 0), 0);
+    if (owed > 0.5) rows.push({ p, owed, lastPay: payments.filter(x => x.patientId === p.id).map(x => x.date).sort().pop() || '', lastVisit: vs.map(v => v.date).sort().pop() || '' });
+  });
+  rows.sort((a, b) => b.owed - a.owed);
+  const total = rows.reduce((s, r) => s + r.owed, 0);
+  main.innerHTML = `
+    <div class="page-header"><h2>المديونيات <span class="count-badge">${rows.length}</span></h2>
+      <div class="page-actions"><button class="btn" id="btn-export-debts">تصدير Excel</button></div></div>
+    <div class="summary-cards">
+      <div class="stat-card"><div class="stat-label">إجمالي المستحق على المرضى</div><div class="stat-value stat-bad">${U.money(total)}</div></div>
+      <div class="stat-card"><div class="stat-label">عدد المرضى المدينين</div><div class="stat-value">${rows.length}</div></div>
+    </div>
+    <div class="card"><div class="table-wrap"><table class="table">
+      <thead><tr><th>رقم الملف</th><th>المريض</th><th>الموبايل</th><th>المتبقي</th><th>آخر دفعة</th><th>آخر زيارة</th><th></th></tr></thead>
+      <tbody>${rows.map(r => `<tr>
+        <td>${U.esc(r.p.fileNumber)}</td><td><a href="#patients/${r.p.id}">${U.esc(r.p.fullName)}</a></td><td>${U.esc(r.p.phone || '')}</td>
+        <td class="text-bad">${U.money(r.owed)}</td><td>${r.lastPay ? U.fmtDate(r.lastPay) : ''}</td><td>${r.lastVisit ? U.fmtDate(r.lastVisit) : ''}</td>
+        <td style="white-space:nowrap"><button class="btn btn-sm btn-primary" data-pay-debt="${r.p.id}">تسجيل دفعة</button>
+          ${r.p.phone ? `<button class="btn btn-sm" data-wa="${U.esc(U.waLink(r.p.phone, `السلام عليكم ${r.p.fullName}، تذكير بمبلغ مستحق لحضرتك في ${clinic} قدره ${U.money(r.owed)}. نرجو التواصل لتسوية المبلغ. شكرًا لحضرتك.`))}">واتساب</button>` : ''}</td>
+      </tr>`).join('') || '<tr><td colspan="7" class="empty-cell">لا توجد مديونيات 🎉</td></tr>'}</tbody></table></div></div>`;
+  main.querySelectorAll('[data-pay-debt]').forEach(b => b.addEventListener('click', () => Views.openAddPaymentModal(Number(b.dataset.payDebt), null, () => route())));
+  main.querySelectorAll('[data-wa]').forEach(b => b.addEventListener('click', () => window.open(b.dataset.wa, '_blank')));
+  main.querySelector('#btn-export-debts').addEventListener('click', () => U.exportToExcel([{ name: 'المديونيات', rows: rows.map(r => ({
+    'رقم الملف': r.p.fileNumber, 'المريض': r.p.fullName, 'الموبايل': r.p.phone || '', 'المتبقي': r.owed, 'آخر دفعة': r.lastPay ? U.fmtDate(r.lastPay) : '', 'آخر زيارة': r.lastVisit ? U.fmtDate(r.lastVisit) : '' })) }], 'المديونيات.xlsx'));
+};

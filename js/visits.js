@@ -193,6 +193,8 @@ async function renderVisitDetail(main, visitId) {
       <div class="page-actions">
         <button class="btn" id="btn-add-payment">+ تسجيل دفعة</button>
         <button class="btn" id="btn-edit-visit-date">تعديل التاريخ</button>
+        <button class="btn" id="btn-edit-visit">تعديل الزيارة</button>
+        <button class="btn btn-danger" id="btn-delete-visit">حذف الزيارة</button>
         <button class="btn" id="btn-print-visit">طباعة</button>
       </div>
     </div>
@@ -218,12 +220,14 @@ async function renderVisitDetail(main, visitId) {
         <h3>الدفعات المرتبطة بهذه الزيارة</h3>
         <table class="table table-compact">
           <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th></th></tr></thead>
-          <tbody>${payments.map(p => `<tr><td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button></td></tr>`).join('') || `<tr><td colspan="4" class="empty-cell">لا توجد دفعات</td></tr>`}</tbody>
+          <tbody>${payments.map(p => `<tr><td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td style="white-space:nowrap"><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button> <button class="btn btn-sm btn-danger" data-del-pay="${p.id}">حذف</button></td></tr>`).join('') || `<tr><td colspan="4" class="empty-cell">لا توجد دفعات</td></tr>`}</tbody>
         </table>
       </div>
     </div>`;
   main.querySelector('#btn-add-payment').addEventListener('click', () => Views.openAddPaymentModal(patient.id, visitId, () => route()));
   bindPaymentEdit(main);
+  main.querySelector('#btn-edit-visit').addEventListener('click', () => Views.openEditVisitModal(visit.id, () => route()));
+  main.querySelector('#btn-delete-visit').addEventListener('click', () => deleteVisitFlow(visit, () => goto('#patients/' + visit.patientId)));
   main.querySelector('#btn-edit-visit-date').addEventListener('click', () => {
     const ov = U.openModal('تعديل تاريخ الزيارة', `<label>التاريخ<input type="date" id="vd-input" class="input" value="${visit.date}"></label>`,
       '<button class="btn btn-secondary" data-close>إلغاء</button><button class="btn btn-primary" id="vd-save">حفظ</button>');
@@ -285,4 +289,92 @@ async function exportPatientLedgerExcel(fromDate, toDate) {
   });
 
   U.exportToExcel([{ name: 'Patients', rows }], `كشف_حسابات_المرضى_${U.todayISO()}.xlsx`);
+}
+
+
+/* تعديل زيارة: النوع، الدكتور، التشخيص، الملاحظات، الخدمات (سعر/سن/حذف/إضافة)، الخصم. المدفوع بيفضل زي ما هو والمتبقي بيتحسب */
+Views.openEditVisitModal = async function(visitId, onSaved) {
+  const [visit, lines, visitTypes, doctors, services, cats] = await Promise.all([
+    DB.get('visits', visitId), DB.byIndex('visitServices', 'visitId', visitId), DB.all('visitTypes'), DB.all('doctors'), DB.all('services'), DB.all('serviceCategories')]);
+  if (!visit) return;
+  const items = lines.map(l => ({ ...l })); const removed = [];
+  const types = visitTypes.map(v => v.name); if (visit.visitType && !types.includes(visit.visitType)) types.unshift(visit.visitType);
+  const docs = doctors.filter(d => d.active !== false).map(d => d.name); if (visit.doctorName && !docs.includes(visit.doctorName)) docs.unshift(visit.doctorName);
+  const overlay = U.openModal('تعديل الزيارة', `
+    <form id="visit-edit-form" class="form-grid">
+      <label>نوع الزيارة<select name="visitType" class="input">${types.map(t => `<option ${t === visit.visitType ? 'selected' : ''}>${U.esc(t)}</option>`).join('')}</select></label>
+      <label>دكتور الشيفت<select name="doctorName" class="input"><option value="">بدون تحديد</option>${docs.map(d => `<option ${d === visit.doctorName ? 'selected' : ''}>${U.esc(d)}</option>`).join('')}</select></label>
+      <label class="span-2">التشخيص<input name="diagnosis" class="input" value="${U.esc(visit.diagnosis || '')}"></label>
+      <label class="span-2">ملاحظات الطبيب<textarea name="doctorNotes" class="input" rows="2">${U.esc(visit.doctorNotes || '')}</textarea></label>
+    </form>
+    <h4>الخدمات</h4>
+    <div class="service-picker-row">
+      <select id="ev-svc" class="input"><option value="">إضافة خدمة...</option>${cats.map(c => `<optgroup label="${U.esc(c.name)}">${services.filter(s => s.categoryId === c.id && s.active !== false).map(s => `<option value="${s.id}" data-name="${U.esc(s.name)}">${U.esc(s.name)}</option>`).join('')}</optgroup>`).join('')}</select>
+      <input type="text" id="ev-tooth" class="input" placeholder="السن" style="width:100px">
+      <input type="number" id="ev-price" class="input" placeholder="السعر" min="0" step="0.01" style="width:130px">
+      <button type="button" class="btn" id="ev-add">+ إضافة</button>
+    </div>
+    <div class="table-wrap"><table class="table table-compact"><thead><tr><th>الخدمة</th><th>السن</th><th>السعر</th><th></th></tr></thead><tbody id="ev-tbody"></tbody></table></div>
+    <div class="form-grid" style="margin-top:10px">
+      <label>نوع الخصم<select id="ev-dtype" class="input"><option value="fixed" ${visit.discountType !== 'percentage' ? 'selected' : ''}>مبلغ ثابت</option><option value="percentage" ${visit.discountType === 'percentage' ? 'selected' : ''}>نسبة %</option></select></label>
+      <label>قيمة الخصم<input type="number" id="ev-dval" class="input" min="0" value="${visit.discountValue || 0}"></label>
+    </div>
+    <div class="visit-totals"><div>بعد الخصم: <b id="ev-total"></b></div><div>المدفوع: <b>${U.money(visit.paid)}</b></div><div>المتبقي: <b id="ev-rem"></b></div></div>`,
+    '<button class="btn btn-secondary" data-close>إلغاء</button><button class="btn btn-primary" id="ev-save">حفظ التعديلات</button>', { wide: true });
+  const tb = overlay.querySelector('#ev-tbody');
+  const calc = () => {
+    const subtotal = items.reduce((s, it) => s + Number(it.price || 0), 0);
+    const total = U.discountedTotal(subtotal, overlay.querySelector('#ev-dtype').value, Number(overlay.querySelector('#ev-dval').value) || 0);
+    const remaining = visit.importedFrom === 'legacy-sheet' ? Number(visit.remaining) + (total - Number(visit.total)) : Math.max(0, total - Number(visit.paid));
+    overlay.querySelector('#ev-total').textContent = U.money(total); overlay.querySelector('#ev-rem').textContent = U.money(remaining);
+    return { subtotal, total, remaining };
+  };
+  const render = () => {
+    tb.innerHTML = items.map((it, i) => `<tr><td>${U.esc(it.serviceName)}</td>
+      <td><input class="input input-sm ev-tooth" data-i="${i}" value="${U.esc(it.tooth || '')}" style="width:80px"></td>
+      <td><input type="number" class="input input-sm ev-pr" data-i="${i}" value="${it.price}"></td>
+      <td><button type="button" class="btn btn-sm btn-danger" data-rm="${i}">حذف</button></td></tr>`).join('') || '<tr><td colspan="4" class="empty-cell">لا توجد خدمات</td></tr>';
+    tb.querySelectorAll('.ev-pr').forEach(x => x.addEventListener('input', () => { items[+x.dataset.i].price = Number(x.value) || 0; calc(); }));
+    tb.querySelectorAll('.ev-tooth').forEach(x => x.addEventListener('input', () => { items[+x.dataset.i].tooth = x.value; }));
+    tb.querySelectorAll('[data-rm]').forEach(b => b.addEventListener('click', () => { const it = items.splice(+b.dataset.rm, 1)[0]; if (it.id) removed.push(it.id); render(); calc(); }));
+  };
+  render(); calc();
+  overlay.querySelector('#ev-dtype').addEventListener('change', calc); overlay.querySelector('#ev-dval').addEventListener('input', calc);
+  overlay.querySelector('#ev-add').addEventListener('click', () => {
+    const sel = overlay.querySelector('#ev-svc'), opt = sel.selectedOptions[0], pr = overlay.querySelector('#ev-price');
+    if (!opt || !opt.value) { U.toast('اختر الخدمة أولًا', 'error'); return; }
+    if (pr.value === '' || isNaN(Number(pr.value))) { U.toast('أدخل سعر الحالة', 'error'); pr.focus(); return; }
+    items.push({ serviceId: Number(opt.value), serviceName: opt.dataset.name, tooth: overlay.querySelector('#ev-tooth').value, price: Number(pr.value) });
+    sel.value = ''; pr.value = ''; overlay.querySelector('#ev-tooth').value = ''; render(); calc();
+  });
+  overlay.querySelector('#ev-save').addEventListener('click', async () => {
+    if (!items.length) { U.toast('لازم خدمة واحدة على الأقل', 'error'); return; }
+    if (removed.length && !canDo('delete')) { U.toast('ليس لديك صلاحية حذف الخدمات', 'error'); return; }
+    const { subtotal, total, remaining } = calc();
+    if (visit.importedFrom !== 'legacy-sheet' && Number(visit.paid) > total && !(await U.confirm(`المدفوع (${U.money(visit.paid)}) أكبر من الإجمالي الجديد (${U.money(total)}). متابعة؟`))) return;
+    const f = Object.fromEntries(new FormData(overlay.querySelector('#visit-edit-form')).entries());
+    await DB.put('visits', { ...visit, visitType: f.visitType, doctorName: f.doctorName || '', diagnosis: f.diagnosis || '', doctorNotes: f.doctorNotes || '',
+      discountType: overlay.querySelector('#ev-dtype').value, discountValue: Number(overlay.querySelector('#ev-dval').value) || 0, subtotal, total, remaining });
+    for (const it of items) {
+      if (it.id) await DB.put('visitServices', it);
+      else await DB.add('visitServices', { visitId, serviceId: it.serviceId, serviceName: it.serviceName, tooth: it.tooth || '', price: it.price, qty: 1 });
+    }
+    for (const id of removed) await DB.delete('visitServices', id);
+    U.toast('تم تعديل الزيارة'); overlay.remove(); if (onSaved) onSaved();
+  });
+};
+
+async function deleteVisitFlow(visit, onDone) {
+  if (!canDo('delete')) { U.toast('ليس لديك صلاحية الحذف', 'error'); return; }
+  const [lines, pays, rxs, plans] = await Promise.all([DB.byIndex('visitServices', 'visitId', visit.id), DB.byIndex('payments', 'visitId', visit.id),
+    DB.byIndex('prescriptions', 'visitId', visit.id), DB.byIndex('treatmentPlans', 'patientId', visit.patientId)]);
+  const linkedPlans = plans.filter(t => t.convertedVisitId === visit.id);
+  const paidSum = pays.reduce((s, p) => s + Number(p.amount), 0);
+  if (!(await U.confirm(`حذف زيارة ${U.fmtDate(visit.date)} (${U.money(visit.total)}) نهائيًا؟ هيتحذف معاها ${lines.length} خدمة و${pays.length} دفعة (${U.money(paidSum)}).${rxs.length ? ` الروشتات المرتبطة (${rxs.length}) هتفضل من غير ربط بالزيارة.` : ''}`))) return;
+  for (const p of pays) await DB.delete('payments', p.id);
+  for (const l of lines) await DB.delete('visitServices', l.id);
+  for (const r of rxs) await DB.put('prescriptions', { ...r, visitId: null });
+  for (const t of linkedPlans) await DB.put('treatmentPlans', { ...t, convertedVisitId: null, status: 'مخطط' });
+  await DB.delete('visits', visit.id);
+  U.toast('تم حذف الزيارة'); onDone();
 }

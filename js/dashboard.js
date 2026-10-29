@@ -5,8 +5,8 @@
 const DASH = { mode: 'day', day: null, month: null };
 
 Views.dashboard = async function(main) {
-  const [patients, visits, payments, expenses, appointments, allVS, expCats] = await Promise.all([
-    DB.all('patients'), DB.all('visits'), DB.all('payments'), DB.all('expenses'), DB.all('appointments'), DB.all('visitServices'), DB.all('expenseCategories'),
+  const [patients, visits, payments, expenses, appointments, allVS, expCats, statuses] = await Promise.all([
+    DB.all('patients'), DB.all('visits'), DB.all('payments'), DB.all('expenses'), DB.all('appointments'), DB.all('visitServices'), DB.all('expenseCategories'), DB.all('appointmentStatuses'),
   ]);
   if (!DASH.day) { DASH.day = U.todayISO(); DASH.month = DASH.day.slice(0, 7); }
   const isDay = DASH.mode === 'day';
@@ -33,6 +33,15 @@ Views.dashboard = async function(main) {
   else { const [y, m] = DASH.month.split('-').map(Number); days = [...Array(new Date(y, m, 0).getDate())].map((_, i) => `${DASH.month}-${String(i + 1).padStart(2, '0')}`); }
   const monthLabel = (() => { const [y, m] = DASH.month.split('-').map(Number); return new Date(y, m - 1, 1).toLocaleDateString('ar-EG', { month: 'long', year: 'numeric' }); })();
   const label = isDay ? U.fmtDate(DASH.day) : monthLabel;
+  const patById = Object.fromEntries(patients.map(p => [p.id, p]));
+  const clinic = (APP_STATE.clinicInfo && APP_STATE.clinicInfo.name) || 'العيادة';
+  const agendaDay = isDay ? DASH.day : U.todayISO();
+  const byTime = (a, b) => (a.time || '').localeCompare(b.time || '');
+  const agenda = appointments.filter(a => a.date === agendaDay).sort(byTime);
+  const now = new Date(); const tomorrow = U.isoLocal(new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1));
+  const tmr = appointments.filter(a => a.date === tomorrow && a.status !== 'ملغي').sort(byTime);
+  const quick = ['وصل', 'تم الكشف', 'لم يحضر'].filter(n => statuses.some(s => s.name === n));
+  const canAppt = canDo('appointments'), canVisit = canDo('visits');
   const card = (l, v, cls) => `<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value ${cls || ''}">${v}</div></div>`;
 
   main.innerHTML = `
@@ -56,6 +65,21 @@ Views.dashboard = async function(main) {
       ${card('إجمالي المرضى', activePatients.length)}${card('المبالغ المستحقة', U.money(outstanding), 'stat-bad')}${card('ديون على العيادة (موردين/معامل)', U.money(outstandingDebt), 'stat-bad')}
     </div>
 
+    <div class="two-col">
+      <div class="card">
+        <h3>جدول ${agendaDay === U.todayISO() ? 'اليوم' : U.fmtDate(agendaDay)} (${agenda.length})</h3>
+        <div class="table-wrap"><table class="table table-compact"><tbody>${agenda.map(a => `<tr>
+          <td>${U.esc(a.time || '')}</td><td>${U.esc((patById[a.patientId] || {}).fullName || '')}</td><td>${U.esc(a.status || '')}</td>
+          <td style="white-space:nowrap">${canAppt ? quick.filter(n => n !== a.status).map(n => `<button class="btn btn-sm" data-ag-st="${a.id}" data-st="${U.esc(n)}">${n}</button>`).join(' ') : ''}
+            ${canVisit ? `<button class="btn btn-sm btn-primary" data-ag-visit="${a.id}">زيارة</button>` : ''}</td></tr>`).join('') || '<tr><td class="empty-cell">لا توجد مواعيد</td></tr>'}</tbody></table></div>
+      </div>
+      <div class="card">
+        <h3>تذكير مواعيد بكرة (${tmr.length})</h3>
+        <div class="table-wrap"><table class="table table-compact"><tbody>${tmr.map(a => { const p = patById[a.patientId] || {}; return `<tr>
+          <td>${U.esc(a.time || '')}</td><td>${U.esc(p.fullName || '')}</td>
+          <td>${p.phone ? `<button class="btn btn-sm" data-wa="${U.esc(U.waLink(p.phone, `السلام عليكم ${p.fullName}، تذكير بموعدك في ${clinic} غدًا ${U.fmtDate(tomorrow)} الساعة ${a.time}. برجاء التأكيد.`))}">واتساب</button>` : '<span class="muted-sm">بدون رقم</span>'}</td></tr>`; }).join('') || '<tr><td class="empty-cell">لا توجد مواعيد بكرة</td></tr>'}</tbody></table></div>
+      </div>
+    </div>
     <div class="two-col">
       <div class="card">
         <h3>${isDay ? 'الإيرادات - آخر 14 يومًا حتى ' + label : 'الإيرادات اليومية - ' + label}</h3>
@@ -85,6 +109,15 @@ Views.dashboard = async function(main) {
   const di = main.querySelector('#dash-date'), mi = main.querySelector('#dash-month');
   if (di) di.addEventListener('change', () => { if (di.value) { DASH.day = di.value; DASH.month = di.value.slice(0, 7); Views.dashboard(main); } });
   if (mi) mi.addEventListener('change', () => { if (mi.value) { DASH.month = mi.value; Views.dashboard(main); } });
+  main.querySelectorAll('[data-ag-st]').forEach(b => b.addEventListener('click', async () => {
+    const a = appointments.find(x => x.id === Number(b.dataset.agSt));
+    await DB.put('appointments', { ...a, status: b.dataset.st }); Views.dashboard(main);
+  }));
+  main.querySelectorAll('[data-ag-visit]').forEach(b => b.addEventListener('click', () => {
+    const a = appointments.find(x => x.id === Number(b.dataset.agVisit));
+    Views.openNewVisitModal(a.patientId, { appointmentId: a.id, visitType: a.visitType });
+  }));
+  main.querySelectorAll('[data-wa]').forEach(b => b.addEventListener('click', () => window.open(b.dataset.wa, '_blank')));
   main.querySelector('#dash-today').addEventListener('click', () => { DASH.day = U.todayISO(); DASH.month = DASH.day.slice(0, 7); Views.dashboard(main); });
 };
 

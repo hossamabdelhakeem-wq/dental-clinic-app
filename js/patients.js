@@ -94,6 +94,7 @@ Views.openNewPatientModal = function(onSaved) {
       const form = overlay.querySelector('#patient-form');
       if (!form.reportValidity()) return;
       const data = Object.fromEntries(new FormData(form).entries());
+      if (!(await checkPatientInput(data, null, null))) return;
       const fileNumber = await nextFileNumber();
       const id = await DB.add('patients', { ...data, fileNumber, createdAt: data.createdAt || U.todayISO(), isDeleted: false });
       U.toast(`تم إنشاء المريض برقم ملف ${fileNumber}`);
@@ -148,6 +149,7 @@ Views.openEditPatientModal = function(patient, onSaved) {
       const form = overlay.querySelector('#patient-edit-form');
       if (!form.reportValidity()) return;
       const data = Object.fromEntries(new FormData(form).entries());
+      if (!(await checkPatientInput(data, patient.id, patient))) return;
       if (!data.createdAt) data.createdAt = patient.createdAt || U.todayISO();
       await DB.put('patients', { ...patient, ...data });
       U.toast('تم حفظ التعديلات');
@@ -222,7 +224,7 @@ async function renderPatientProfile(main, patientId) {
             <thead><tr><th>التاريخ</th><th>المبلغ</th><th>الطريقة</th><th></th></tr></thead>
             <tbody>
               ${payments.sort((a,b)=>b.date.localeCompare(a.date)).map(p => `<tr>
-                <td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button></td>
+                <td>${U.fmtDate(p.date)}</td><td>${U.money(p.amount)}</td><td>${U.esc(p.method)}</td><td style="white-space:nowrap"><button class="btn btn-sm" data-edit-pay="${p.id}">تعديل</button> <button class="btn btn-sm btn-danger" data-del-pay="${p.id}">حذف</button></td>
               </tr>`).join('') || `<tr><td colspan="4" class="empty-cell">لا توجد مدفوعات</td></tr>`}
             </tbody>
           </table>
@@ -388,4 +390,22 @@ async function deletePatientFlow(patient, onDone) {
   await DB.delete('patients', patient.id);
   U.toast('تم حذف المريض');
   onDone();
+}
+
+
+/* تحقق قبل حفظ المريض: رقم موبايل غلط أو مريض مكرر (نفس الرقم/الاسم) */
+async function checkPatientInput(data, selfId, orig) {
+  for (const [k, label] of [['phone', 'رقم الموبايل'], ['altPhone', 'رقم الموبايل البديل']]) {
+    if (data[k] && String(data[k]).trim() && !(orig && orig[k] === data[k]) && !U.validPhone(data[k])
+        && !(await U.confirm(`${label} (${data[k]}) شكله غير صحيح (المفروض 11 رقم يبدأ بـ 01). تكمل برضه؟`))) return false;
+  }
+  const nm = String(data.fullName || '').trim().replace(/\s+/g, ' ');
+  const ph = U.validPhone(data.phone) ? U.normPhone(data.phone) : '';
+  if (orig && String(orig.fullName || '').trim().replace(/\s+/g, ' ') === nm && U.normPhone(orig.phone) === ph) return true;
+  const all = (await DB.all('patients')).filter(p => !p.isDeleted && p.id !== selfId);
+  const dupPhone = ph && all.find(p => U.normPhone(p.phone) === ph || U.normPhone(p.altPhone) === ph);
+  const dupName = nm && all.find(p => String(p.fullName || '').trim().replace(/\s+/g, ' ') === nm);
+  const d = dupPhone || dupName;
+  if (d) return U.confirm(`فيه مريض ${dupPhone ? 'بنفس رقم الموبايل' : 'بنفس الاسم'} بالفعل: ${d.fullName} (${d.fileNumber}). تحفظ برضه؟`);
+  return true;
 }
