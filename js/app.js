@@ -89,6 +89,7 @@ async function route() {
       case 'prescriptions': await Views.prescriptions(main, param); break;
       case 'treatmentplans': await Views.treatmentplans(main, param); break;
       case 'payments': await Views.payments(main, param); break;
+      case 'debts': await Views.debts(main); break;
       case 'expenses': await Views.expenses(main, param); break;
       case 'reports': await Views.reports(main, param); break;
       case 'settings': await Views.settings(main, param); break;
