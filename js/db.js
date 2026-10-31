@@ -156,7 +156,12 @@ async function nextSequence(name) {
   return cur;
 }
 function formatSeq(prefix, n) { return `${prefix}-${String(n).padStart(5, '0')}`; }
-async function nextFileNumber() { return formatSeq('P', await nextSequence('patient')); }
+async function nextFileNumber() {
+  // بيتخطى أي رقم ملف مستخدم بالفعل (مثلًا بعد استرجاع نسخة احتياطية أو بيانات مستوردة)
+  let fn;
+  do { fn = formatSeq('P', await nextSequence('patient')); } while ((await DB.byIndex('patients', 'fileNumber', fn)).length);
+  return fn;
+}
 async function nextRxNumber() { return formatSeq('RX', await nextSequence('rx')); }
 
 async function ensureDefaults() {
