@@ -56,7 +56,8 @@ function setupSidebarToggle() {
 
 function renderSidebar() {
   const nav = document.getElementById('sidebar-nav');
-  nav.innerHTML = ROUTES.filter(r => canDo(r.key)).map(r => `
+  const GROUPS = { patients: 'العيادة', payments: 'المالية', settings: 'النظام' };
+  nav.innerHTML = ROUTES.filter(r => canDo(r.key)).map(r => `${GROUPS[r.key] ? `<div class="nav-group">${GROUPS[r.key]}</div>` : ''}
     <a href="#${r.key}" class="nav-item" data-key="${r.key}">
       <span class="nav-icon">${r.icon}</span><span class="nav-label">${r.label}</span>
     </a>`).join('');
@@ -64,6 +65,8 @@ function renderSidebar() {
 
 function setActiveNav(key) {
   document.querySelectorAll('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.key === key));
+  const tt = document.getElementById('topbar-title'), rr = ROUTES.find(r => r.key === key);
+  if (tt && rr) tt.textContent = rr.label;
 }
 
 async function route() {

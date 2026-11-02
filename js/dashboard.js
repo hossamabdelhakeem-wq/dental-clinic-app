@@ -42,7 +42,7 @@ Views.dashboard = async function(main) {
   const tmr = appointments.filter(a => a.date === tomorrow && a.status !== 'ملغي').sort(byTime);
   const quick = ['وصل', 'تم الكشف', 'لم يحضر'].filter(n => statuses.some(s => s.name === n));
   const canAppt = canDo('appointments'), canVisit = canDo('visits');
-  const card = (l, v, cls) => `<div class="stat-card"><div class="stat-label">${l}</div><div class="stat-value ${cls || ''}">${v}</div></div>`;
+  const card = (l, v, cls, ico, kind) => `<div class="stat-card ${kind || ''}">${ico ? `<div class="stat-ico">${ico}</div>` : ''}<div class="stat-label">${l}</div><div class="stat-value ${cls || ''}">${v}</div></div>`;
 
   main.innerHTML = `
     <div class="page-header"><h2>لوحة التحكم</h2>
@@ -57,12 +57,12 @@ Views.dashboard = async function(main) {
 
     <h3 class="section-title">${isDay ? 'اليوم' : 'الشهر'}: ${label}</h3>
     <div class="summary-cards">
-      ${card('عدد المواعيد', pAppts.length)}${card('عدد الزيارات', pVisits.length)}${card('مرضى جدد', pNew.length)}
-      ${card('الإيرادات', U.money(revenue), 'stat-good')}${card('المصروفات', U.money(expTotal), 'stat-bad')}${card('صافي الربح', U.money(revenue - expTotal))}
+      ${card('الإيرادات', U.money(revenue), 'stat-good', '💰', 'kpi kpi-good')}${card('المصروفات', U.money(expTotal), 'stat-bad', '🧾', 'kpi kpi-bad')}${card('صافي الربح', U.money(revenue - expTotal), '', '📈', 'kpi kpi-net')}
+      ${card('عدد المواعيد', pAppts.length, '', '📅')}${card('عدد الزيارات', pVisits.length, '', '🦷')}${card('مرضى جدد', pNew.length, '', '👤')}
     </div>
     <h3 class="section-title">الوضع الحالي (مش مرتبط بالفترة)</h3>
     <div class="summary-cards">
-      ${card('إجمالي المرضى', activePatients.length)}${card('المبالغ المستحقة', U.money(outstanding), 'stat-bad')}${card('ديون على العيادة (موردين/معامل)', U.money(outstandingDebt), 'stat-bad')}
+      ${card('إجمالي المرضى', activePatients.length, '', '👥')}${card('المبالغ المستحقة', U.money(outstanding), 'stat-bad', '📋')}${card('ديون على العيادة (موردين/معامل)', U.money(outstandingDebt), 'stat-bad', '🏷️')}
     </div>
 
     <div class="two-col">
