@@ -56,12 +56,14 @@ Views.dashboard = async function(main) {
     </div>
 
     <h3 class="section-title">${isDay ? 'اليوم' : 'الشهر'}: ${label}</h3>
-    <div class="summary-cards">
+    <div class="summary-cards cols-3">
       ${card('الإيرادات', U.money(revenue), 'stat-good', '💰', 'kpi kpi-good')}${card('المصروفات', U.money(expTotal), 'stat-bad', '🧾', 'kpi kpi-bad')}${card('صافي الربح', U.money(revenue - expTotal), '', '📈', 'kpi kpi-net')}
+    </div>
+    <div class="summary-cards cols-3">
       ${card('عدد المواعيد', pAppts.length, '', '📅')}${card('عدد الزيارات', pVisits.length, '', '🦷')}${card('مرضى جدد', pNew.length, '', '👤')}
     </div>
     <h3 class="section-title">الوضع الحالي (مش مرتبط بالفترة)</h3>
-    <div class="summary-cards">
+    <div class="summary-cards cols-3">
       ${card('إجمالي المرضى', activePatients.length, '', '👥')}${card('المبالغ المستحقة', U.money(outstanding), 'stat-bad', '📋')}${card('ديون على العيادة (موردين/معامل)', U.money(outstandingDebt), 'stat-bad', '🏷️')}
     </div>
 

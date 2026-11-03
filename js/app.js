@@ -65,8 +65,6 @@ function renderSidebar() {
 
 function setActiveNav(key) {
   document.querySelectorAll('.nav-item').forEach(a => a.classList.toggle('active', a.dataset.key === key));
-  const tt = document.getElementById('topbar-title'), rr = ROUTES.find(r => r.key === key);
-  if (tt && rr) tt.textContent = rr.label;
 }
 
 async function route() {
