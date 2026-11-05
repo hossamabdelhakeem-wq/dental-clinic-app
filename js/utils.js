@@ -5,13 +5,14 @@
 const U = {
   money(n) {
     n = Number(n || 0);
-    return n.toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ' + APP_STATE.currency;
+    const s = Math.abs(n).toLocaleString('ar-EG', { minimumFractionDigits: 0, maximumFractionDigits: 2 }) + ' ' + APP_STATE.currency;
+    return n < 0 ? '\u2212' + s : s; // علامة ناقص واضحة (بدل الشرطة اللي بتتكرر في RTL)
   },
   isoLocal(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; },
   todayISO() { return U.isoLocal(new Date()); },
   enableTableSort(root) {
     const col = new Intl.Collator('ar', { numeric: true, sensitivity: 'base' });
-    const norm = (t) => t.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.').replace(/[٬,\s]/g, '').replace(/ج\.م$/, '');
+    const norm = (t) => t.replace(/[٠-٩]/g, d => '٠١٢٣٤٥٦٧٨٩'.indexOf(d)).replace(/٫/g, '.').replace(/\u2212/g, '-').replace(/\u061C/g, '').replace(/[٬,\s]/g, '').replace(/ج\.م$/, '');
     root.querySelectorAll('table.table').forEach(t => {
       const tbody = t.tBodies[0];
       if (t.dataset.sortable || !t.tHead || !tbody || tbody.querySelector('input,select,textarea')) return;

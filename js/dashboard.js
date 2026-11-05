@@ -67,7 +67,7 @@ Views.dashboard = async function(main) {
       ${card('إجمالي المرضى', activePatients.length, '', '👥')}${card('المبالغ المستحقة', U.money(outstanding), 'stat-bad', '📋')}${card('ديون على العيادة (موردين/معامل)', U.money(outstandingDebt), 'stat-bad', '🏷️')}
     </div>
 
-    <div class="two-col">
+    <div class="two-col agenda-row">
       <div class="card">
         <h3>جدول ${agendaDay === U.todayISO() ? 'اليوم' : U.fmtDate(agendaDay)} (${agenda.length})</h3>
         <div class="table-wrap"><table class="table table-compact"><tbody>${agenda.map(a => `<tr>

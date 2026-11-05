@@ -381,8 +381,14 @@ input[type=checkbox], input[type=radio] { accent-color: var(--navy); width: 16px
 .seg-control { flex-wrap: wrap; max-width: 100%; }
 .summary-cards.cols-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); margin-bottom: 14px; }
 @media (max-width: 700px) { .summary-cards.cols-3 { grid-template-columns: repeat(2, minmax(0, 1fr)); } .summary-cards.cols-3 > :first-child { grid-column: 1 / -1; } }
+/* جدول اليوم أعرض من التذكيرات، وبدون كسر أسطر */
+.agenda-row { grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); }
+.agenda-row .table td { white-space: nowrap; }
+.agenda-row .btn-sm { padding: 4px 9px; font-size: 12px; }
 /* قائمة جانبية أكثر إحكامًا: أزرار الإضافة السريعة في صف واحد */
-.nav-item { padding: 7px 10px; }
+.nav-item { padding: 6px 10px; }
+.nav-icon { width: 28px; height: 28px; }
+#sidebar-logo { height: 46px; margin-bottom: 8px; }
 .nav-group { padding: 12px 12px 4px; }
 #sidebar-header { padding: 18px 16px 12px; }
 #sidebar-quick { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; padding: 10px 12px 14px; }
