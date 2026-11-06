@@ -368,7 +368,12 @@ input[type=checkbox], input[type=radio] { accent-color: var(--navy); width: 16px
 .pin-key:hover { background: #eaeff7; }
 .pin-key:active { transform: scale(.96); }
 
-@media (max-width: 600px) { .stat-card.kpi .stat-value { font-size: 20px; } }
+@media (max-width: 600px) {
+  .stat-card:has(.stat-ico) { padding: 14px 56px 14px 12px; min-height: 0; }
+  .stat-ico { width: 34px; height: 34px; right: 12px; top: 14px; font-size: 16px; border-radius: 10px; }
+  .stat-value, .stat-card.kpi .stat-value { font-size: 18px; white-space: nowrap; }
+  .page-header h2 { font-size: 20px; }
+}
 @media (prefers-reduced-motion: reduce) { *, *::before, *::after { animation: none !important; transition: none !important; } }
 
 
