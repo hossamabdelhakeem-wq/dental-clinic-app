@@ -164,7 +164,7 @@ Views.openNewVisitModal = function(patientId, opts={}) {
       const visitId = await DB.add('visits', {
         patientId: Number(data.patientId), appointmentId: opts.appointmentId || null,
         date: data.date, visitType: data.visitType, diagnosis: data.diagnosis || '', doctorNotes: overlay.querySelector('#doctor-notes').value,
-        doctorName: data.doctorName || '',
+        doctorName: data.doctorName || '', doctorPercent: await doctorPercentFor(data.doctorName),
         discountType: dType, discountValue: dVal, subtotal, total, paid, remaining: total - paid, createdAt: new Date().toISOString(), isDeleted: false,
       });
       for (const it of lineItems) await DB.add('visitServices', { visitId, serviceId: it.serviceId, serviceName: it.serviceName, tooth: it.tooth||'', price: it.price, qty: 1 });
@@ -353,7 +353,7 @@ Views.openEditVisitModal = async function(visitId, onSaved) {
     const { subtotal, total, remaining } = calc();
     if (visit.importedFrom !== 'legacy-sheet' && Number(visit.paid) > total && !(await U.confirm(`المدفوع (${U.money(visit.paid)}) أكبر من الإجمالي الجديد (${U.money(total)}). متابعة؟`))) return;
     const f = Object.fromEntries(new FormData(overlay.querySelector('#visit-edit-form')).entries());
-    await DB.put('visits', { ...visit, visitType: f.visitType, doctorName: f.doctorName || '', diagnosis: f.diagnosis || '', doctorNotes: f.doctorNotes || '',
+    await DB.put('visits', { ...visit, visitType: f.visitType, doctorName: f.doctorName || '', doctorPercent: (f.doctorName || '') === (visit.doctorName || '') ? visit.doctorPercent : await doctorPercentFor(f.doctorName), diagnosis: f.diagnosis || '', doctorNotes: f.doctorNotes || '',
       discountType: overlay.querySelector('#ev-dtype').value, discountValue: Number(overlay.querySelector('#ev-dval').value) || 0, subtotal, total, remaining });
     for (const it of items) {
       if (it.id) await DB.put('visitServices', it);

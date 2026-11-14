@@ -12,6 +12,7 @@ const ROUTES = [
   { key: 'payments', label: 'المدفوعات', icon: '💰' },
   { key: 'debts', label: 'المديونيات', icon: '📋' },
   { key: 'expenses', label: 'المصروفات', icon: '🧾' },
+  { key: 'doctors', label: 'حسابات الأطباء', icon: '🩺' },
   { key: 'reports', label: 'التقارير', icon: '📊' },
   { key: 'settings', label: 'الإعدادات', icon: '⚙️' },
   { key: 'backup', label: 'النسخ الاحتياطي', icon: '💾' },
@@ -91,6 +92,7 @@ async function route() {
       case 'treatmentplans': await Views.treatmentplans(main, param); break;
       case 'payments': await Views.payments(main, param); break;
       case 'debts': await Views.debts(main); break;
+      case 'doctors': await Views.doctors(main); break;
       case 'expenses': await Views.expenses(main, param); break;
       case 'reports': await Views.reports(main, param); break;
       case 'settings': await Views.settings(main, param); break;

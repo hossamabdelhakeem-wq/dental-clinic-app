@@ -20,7 +20,7 @@ const LIST_CONFIGS = [
     { name: 'form', label: 'الشكل الدوائي', type: 'text' },
     { name: 'strength', label: 'التركيز', type: 'text' },
   ]},
-  { key: 'doctors', title: 'الأطباء', fields: [{ name: 'name', label: 'اسم الطبيب', type: 'text' }, { name: 'active', label: 'مفعّل', type: 'checkbox' }] },
+  { key: 'doctors', title: 'الأطباء', fields: [{ name: 'name', label: 'اسم الطبيب', type: 'text' }, { name: 'percent', label: 'النسبة %', type: 'number' }, { name: 'active', label: 'مفعّل', type: 'checkbox' }] },
 ];
 
 Views.settings = async function(main, param) {
@@ -191,8 +191,11 @@ async function renderListManager(container, config) {
     const field = input.dataset.field;
     let val = input.type === 'checkbox' ? input.checked : input.value;
     if (input.dataset.numeric) val = Number(val);
+    if (config.key === 'doctors' && field === 'percent') val = Math.min(100, Math.max(0, val || 0));
+    const oldVal = item[field];
     item[field] = val;
     await DB.put(config.key, item);
+    if (config.key === 'doctors' && field === 'percent') await onDoctorPercentSet(item, oldVal);
     U.toast('تم الحفظ');
   }));
   container.querySelector('#add-list-item').addEventListener('click', async () => {
@@ -205,7 +208,9 @@ async function renderListManager(container, config) {
       else obj[f.name] = inp.value;
     });
     if (config.fields.some(f=>f.name==='name') && !obj.name) { U.toast('أدخل الاسم أولًا', 'error'); return; }
+    if (config.key === 'doctors') obj.percent = Math.min(100, Math.max(0, Number(obj.percent) || 0));
     await DB.add(config.key, obj);
+    if (config.key === 'doctors') await onDoctorPercentSet(obj, undefined);
     U.toast('تمت الإضافة');
     renderListManager(container, config);
   });

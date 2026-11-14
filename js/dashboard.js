@@ -2,7 +2,36 @@
    dashboard.js — لوحة التحكم
    ========================================================= */
 
-const DASH = { mode: 'day', day: null, month: null };
+/* ===== تذكير تنظيف الجير: أي خدمة اسمها فيه "جير" أو "تنظيف" بتعتبر تنظيف ===== */
+const normAr = (s) => String(s || '').replace(/[أإآ]/g, 'ا').replace(/ة/g, 'ه').replace(/ى/g, 'ي');
+const isDescaleName = (n) => { const t = normAr(n); return t.includes('جير') || t.includes('تنظيف'); };
+function addMonthsISO(iso, n) {
+  const [y, m, d] = iso.split('-').map(Number);
+  const t = new Date(y, m - 1 + n, 1); const dim = new Date(t.getFullYear(), t.getMonth() + 1, 0).getDate();
+  t.setDate(Math.min(d, dim)); return U.isoLocal(t);
+}
+function monthsBetween(a, b) {
+  const [ya, ma, da] = a.split('-').map(Number), [yb, mb, db] = b.split('-').map(Number);
+  return (yb - ya) * 12 + (mb - ma) - (db < da ? 1 : 0);
+}
+/* آخر تنظيف لكل مريض (من زياراته الفعلية)، ومحتاج تذكير لو عدّى أكتر من 6 شهور ومحدش اتواصل معاه عن نفس الدورة.
+   لما يتسجل تنظيف جديد، التاريخ بيتغيّر والدورة بتبدأ من جديد تلقائيًا. */
+function computeDescale(patients, visits, vsv, today) {
+  const cleanVisits = new Set(vsv.filter(l => isDescaleName(l.serviceName)).map(l => l.visitId));
+  const last = {};
+  visits.forEach(v => { if (!v.isDeleted && cleanVisits.has(v.id) && v.date <= today && (!last[v.patientId] || v.date > last[v.patientId])) last[v.patientId] = v.date; });
+  const due = [], contacted = [];
+  patients.forEach(p => {
+    const ld = last[p.id]; if (p.isDeleted || !ld) return;
+    if (p.descaleContactedFor === ld) { contacted.push({ p, last: ld, at: p.descaleContactedAt }); return; }
+    if (today > addMonthsISO(ld, 6)) due.push({ p, last: ld });
+  });
+  due.sort((a, b) => a.last.localeCompare(b.last));
+  contacted.sort((a, b) => String(b.at || '').localeCompare(String(a.at || '')));
+  return { due, contacted };
+}
+
+const DASH = { mode: 'day', day: null, month: null, descaleAll: false, descaleContacted: false };
 
 Views.dashboard = async function(main) {
   const [patients, visits, payments, expenses, appointments, allVS, expCats, statuses] = await Promise.all([
@@ -42,6 +71,20 @@ Views.dashboard = async function(main) {
   const tmr = appointments.filter(a => a.date === tomorrow && a.status !== 'ملغي').sort(byTime);
   const quick = ['وصل', 'تم الكشف', 'لم يحضر'].filter(n => statuses.some(s => s.name === n));
   const canAppt = canDo('appointments'), canVisit = canDo('visits');
+  const today = U.todayISO(), canPat = canDo('patients');
+  const ds = computeDescale(patients, visits, allVS, today);
+  const dsRow = (x) => { const p = x.p; return `<tr><td><a href="#patients/${p.id}">${U.esc(p.fullName)}</a></td><td>${U.esc(p.phone || '')}</td><td>${U.fmtDate(x.last)}</td><td>${monthsBetween(x.last, today)} شهر</td>
+    <td style="white-space:nowrap">${canPat ? `${p.phone ? `<button class="btn btn-sm" data-wa="${U.esc(U.waLink(p.phone, `السلام عليكم ${p.fullName}، عدّى أكتر من 6 شهور على آخر تنظيف جير لحضرتك عندنا في ${clinic} (${U.fmtDate(x.last)}). تنظيف الجير كل 6 شهور بيحافظ على صحة اللثة والأسنان. تحب نحجزلك موعد؟`))}">واتساب</button> ` : ''}<button class="btn btn-sm btn-primary" data-ds-done="${p.id}">تم التواصل</button>` : ''}</td></tr>`; };
+  const descaleHTML = (ds.due.length || ds.contacted.length) ? `
+    <div class="card" id="descale-card">
+      <h3>🦷 تذكير تنظيف الجير — عدّى أكتر من 6 شهور (${ds.due.length})</h3>
+      ${ds.due.length ? `<div class="table-wrap"><table class="table table-compact"><thead><tr><th>المريض</th><th>الموبايل</th><th>آخر تنظيف</th><th>من</th><th></th></tr></thead>
+        <tbody>${(DASH.descaleAll ? ds.due : ds.due.slice(0, 8)).map(dsRow).join('')}</tbody></table></div>
+        ${ds.due.length > 8 ? `<p><button class="btn btn-sm" id="ds-toggle-all">${DASH.descaleAll ? 'عرض أقل' : `عرض الكل (${ds.due.length})`}</button></p>` : ''}` : '<div class="empty-cell">مفيش مرضى محتاجين تذكير دلوقتي 🎉</div>'}
+      ${ds.contacted.length ? `<p><button class="btn btn-sm" id="ds-toggle-contacted">${DASH.descaleContacted ? 'إخفاء' : 'اللي اتواصلنا معاهم'} (${ds.contacted.length})</button></p>
+        ${DASH.descaleContacted ? `<div class="table-wrap"><table class="table table-compact"><thead><tr><th>المريض</th><th>آخر تنظيف</th><th>تاريخ التواصل</th><th></th></tr></thead>
+          <tbody>${ds.contacted.map(x => `<tr><td><a href="#patients/${x.p.id}">${U.esc(x.p.fullName)}</a></td><td>${U.fmtDate(x.last)}</td><td>${x.at ? U.fmtDate(x.at) : ''}</td><td>${canPat ? `<button class="btn btn-sm" data-ds-undo="${x.p.id}">تراجع</button>` : ''}</td></tr>`).join('')}</tbody></table></div>` : ''}` : ''}
+    </div>` : '';
   const card = (l, v, cls, ico, kind) => `<div class="stat-card ${kind || ''}">${ico ? `<div class="stat-ico">${ico}</div>` : ''}<div class="stat-label">${l}</div><div class="stat-value ${cls || ''}">${v}</div></div>`;
 
   main.innerHTML = `
@@ -82,6 +125,7 @@ Views.dashboard = async function(main) {
           <td>${p.phone ? `<button class="btn btn-sm" data-wa="${U.esc(U.waLink(p.phone, `السلام عليكم ${p.fullName}، تذكير بموعدك في ${clinic} غدًا ${U.fmtDate(tomorrow)} الساعة ${a.time}. برجاء التأكيد.`))}">واتساب</button>` : '<span class="muted-sm">بدون رقم</span>'}</td></tr>`; }).join('') || '<tr><td class="empty-cell">لا توجد مواعيد بكرة</td></tr>'}</tbody></table></div>
       </div>
     </div>
+    ${descaleHTML}
     <div class="two-col">
       <div class="card">
         <h3>${isDay ? 'الإيرادات - آخر 14 يومًا حتى ' + label : 'الإيرادات اليومية - ' + label}</h3>
@@ -120,6 +164,14 @@ Views.dashboard = async function(main) {
     Views.openNewVisitModal(a.patientId, { appointmentId: a.id, visitType: a.visitType });
   }));
   main.querySelectorAll('[data-wa]').forEach(b => b.addEventListener('click', () => window.open(b.dataset.wa, '_blank')));
+  const dsPatch = async (pid, patch) => { const p = patients.find(x => x.id === pid); await DB.put('patients', { ...p, ...patch }); Views.dashboard(main); };
+  main.querySelectorAll('[data-ds-done]').forEach(b => b.addEventListener('click', () => {
+    const x = ds.due.find(y => y.p.id === Number(b.dataset.dsDone));
+    dsPatch(x.p.id, { descaleContactedFor: x.last, descaleContactedAt: today }); U.toast('اتسجل إنه تم التواصل');
+  }));
+  main.querySelectorAll('[data-ds-undo]').forEach(b => b.addEventListener('click', () => dsPatch(Number(b.dataset.dsUndo), { descaleContactedFor: null, descaleContactedAt: null })));
+  const dsAll = main.querySelector('#ds-toggle-all'); if (dsAll) dsAll.addEventListener('click', () => { DASH.descaleAll = !DASH.descaleAll; Views.dashboard(main); });
+  const dsCon = main.querySelector('#ds-toggle-contacted'); if (dsCon) dsCon.addEventListener('click', () => { DASH.descaleContacted = !DASH.descaleContacted; Views.dashboard(main); });
   main.querySelector('#dash-today').addEventListener('click', () => { DASH.day = U.todayISO(); DASH.month = DASH.day.slice(0, 7); Views.dashboard(main); });
 };
 

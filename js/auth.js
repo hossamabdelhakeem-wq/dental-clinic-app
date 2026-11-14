@@ -13,6 +13,7 @@ const PERMISSIONS = [
   { key: 'treatmentplans', label: 'خطط العلاج' },
   { key: 'payments', label: 'المدفوعات' },
   { key: 'debts', label: 'المديونيات' },
+  { key: 'doctors', label: 'حسابات الأطباء' },
   { key: 'expenses', label: 'المصروفات' },
   { key: 'reports', label: 'التقارير' },
   { key: 'settings', label: 'الإعدادات' },
@@ -23,7 +24,7 @@ const PERMISSIONS = [
 const PERM_LABEL = Object.fromEntries(PERMISSIONS.map(p => [p.key, p.label]));
 const PERM_PRESETS = {
   'استقبال': ['patients', 'appointments', 'visits', 'payments'],
-  'محاسب': ['payments', 'debts', 'expenses', 'reports', 'export'],
+  'محاسب': ['payments', 'debts', 'doctors', 'expenses', 'reports', 'export'],
   'طبيب': ['dashboard', 'patients', 'appointments', 'visits', 'prescriptions', 'treatmentplans'],
 };
 const IDLE_LOCK_MS = 10 * 60 * 1000;
